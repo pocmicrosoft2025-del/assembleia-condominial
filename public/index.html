@@ -494,13 +494,14 @@ socket.on('error', ({ message }) => toast(message, 'danger'));
 // NAVIGATION
 // ══════════════════════════════════════════════════════════════════════════════
 function showView(id) {
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v => {
+    v.classList.remove('active');
+    v.style.display = 'none';
+  });
   const el = document.getElementById(id);
   if (el) {
     el.classList.add('active');
-    // landing is flex, others are block
-    if (id === 'view-landing') el.style.display = 'flex';
-    else el.style.display = 'block';
+    el.style.display = (id === 'view-landing') ? 'flex' : 'block';
   }
 }
 
