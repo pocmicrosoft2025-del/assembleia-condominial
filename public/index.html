@@ -1,0 +1,1322 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Votação — Assembleia Condominial</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"/>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --primary: #1a3a5c;
+      --accent:  #2e86de;
+      --success: #27ae60;
+      --danger:  #c0392b;
+      --warning: #f39c12;
+      --light-bg: #f4f6f9;
+    }
+    body { background: var(--light-bg); font-family: 'Segoe UI', sans-serif; }
+
+    /* ── Topo ── */
+    .topbar { background: var(--primary); color: #fff; padding: 12px 24px; display:flex; align-items:center; gap:12px; }
+    .topbar .logo { font-size:1.4rem; font-weight:700; letter-spacing:1px; }
+    .topbar .badge-role { font-size:.75rem; background:var(--accent); padding:3px 10px; border-radius:20px; }
+
+    /* ── Cartões ── */
+    .card { border:none; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,.08); }
+    .card-header { background:var(--primary); color:#fff; border-radius:12px 12px 0 0 !important; font-weight:600; }
+
+    /* ── Views ── */
+    .view { display:none; }
+    .view.active { display:block; }
+
+    /* ── Landing ── */
+    #view-landing { min-height:100vh; display:flex; align-items:center; justify-content:center; }
+    .landing-card { max-width:480px; width:100%; text-align:center; padding:40px 32px; }
+    .landing-card h1 { color:var(--primary); font-size:1.8rem; font-weight:700; }
+    .landing-card p { color:#666; }
+    .btn-landing { width:100%; padding:16px; font-size:1.1rem; border-radius:10px; margin-bottom:12px; font-weight:600; }
+    .btn-admin { background:var(--primary); color:#fff; border:none; }
+    .btn-admin:hover { background:#15304d; color:#fff; }
+    .btn-participant { background:#fff; color:var(--primary); border:2px solid var(--primary); }
+    .btn-participant:hover { background:var(--light-bg); }
+
+    /* ── Abas admin ── */
+    .nav-tabs .nav-link { color: var(--primary); font-weight:500; }
+    .nav-tabs .nav-link.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+
+    /* ── Votação participante ── */
+    .pauta-card { border-left:4px solid var(--accent); margin-bottom:16px; }
+    .pauta-card.closed { border-left-color:#ccc; opacity:.7; }
+    .vote-btn { min-width:90px; border-radius:8px; font-weight:600; }
+    .vote-btn.voted { transform:scale(1.05); box-shadow:0 0 0 3px rgba(46,134,222,.35); }
+    .unit-tag { background:var(--accent); color:#fff; border-radius:20px; padding:3px 12px; font-size:.82rem; font-weight:600; display:inline-block; margin:2px; }
+
+    /* ── Badge status pauta ── */
+    .badge-pending { background:#e9ecef; color:#555; }
+    .badge-open    { background:#d4edda; color:#155724; }
+    .badge-closed  { background:#f8d7da; color:#721c24; }
+
+    /* ── Resultados ── */
+    .result-bar-wrap { height:22px; background:#e9ecef; border-radius:6px; overflow:hidden; position:relative; }
+    .result-bar { height:100%; border-radius:6px; transition:width .5s ease; display:flex; align-items:center; padding-left:8px; font-size:.78rem; font-weight:700; color:#fff; }
+    .bar-sim  { background: var(--success); }
+    .bar-nao  { background: var(--danger); }
+    .bar-abs  { background: var(--warning); }
+
+    /* ── Proxy tag ── */
+    .proxy-badge { font-size:.72rem; background:#fff3cd; color:#856404; border:1px solid #ffc107; border-radius:4px; padding:1px 6px; }
+
+    /* ── Responsive ── */
+    @media(max-width:576px) {
+      .topbar { padding:10px 16px; }
+      .landing-card { padding:24px 16px; }
+    }
+
+    /* ── Spinner overlay ── */
+    #spinner-overlay { position:fixed; inset:0; background:rgba(0,0,0,.4); display:flex; align-items:center; justify-content:center; z-index:9999; display:none; }
+    #spinner-overlay.show { display:flex; }
+
+    /* ── Toast ── */
+    .toast-container { position:fixed; top:16px; right:16px; z-index:11000; }
+  </style>
+</head>
+<body>
+
+<!-- Spinner -->
+<div id="spinner-overlay"><div class="spinner-border text-light" style="width:3rem;height:3rem"></div></div>
+
+<!-- Toasts -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     TOPBAR
+════════════════════════════════════════════════════════════════════ -->
+<div class="topbar" id="topbar" style="display:none">
+  <i class="bi bi-building fs-4"></i>
+  <span class="logo">Assembleia Condominial</span>
+  <span class="badge-role ms-auto" id="topbar-role"></span>
+  <span id="topbar-assembly-name" class="ms-2 small opacity-75"></span>
+  <button class="btn btn-sm btn-outline-light ms-3" onclick="logout()"><i class="bi bi-box-arrow-right"></i></button>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     VIEW: LANDING
+════════════════════════════════════════════════════════════════════ -->
+<div id="view-landing" class="view active">
+  <div class="landing-card card shadow">
+    <div class="text-center mb-4">
+      <i class="bi bi-building" style="font-size:3rem;color:var(--primary)"></i>
+      <h1 class="mt-2">Votação Condominial</h1>
+      <p>Sistema de apuração de votos em assembleia</p>
+    </div>
+    <button class="btn btn-landing btn-admin" onclick="showView('view-admin-login')">
+      <i class="bi bi-shield-lock me-2"></i>Acesso do Administrador
+    </button>
+    <button class="btn btn-landing btn-participant" onclick="showView('view-participant-join')">
+      <i class="bi bi-person-check me-2"></i>Participar da Assembleia
+    </button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     VIEW: ADMIN LOGIN
+════════════════════════════════════════════════════════════════════ -->
+<div id="view-admin-login" class="view">
+  <div class="container" style="max-width:420px; padding-top:80px">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-shield-lock me-2"></i>Login Administrador</div>
+      <div class="card-body p-4">
+        <div class="mb-3">
+          <label class="form-label">Senha de administrador</label>
+          <input type="password" id="admin-password" class="form-control" placeholder="Digite a senha"
+                 onkeydown="if(event.key==='Enter') adminLogin()"/>
+        </div>
+        <div id="admin-login-error" class="text-danger small mb-2" style="display:none"></div>
+        <button class="btn btn-primary w-100" onclick="adminLogin()">
+          <i class="bi bi-unlock me-2"></i>Entrar
+        </button>
+        <button class="btn btn-link w-100 mt-2" onclick="showView('view-landing')">← Voltar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     VIEW: ADMIN SETUP
+════════════════════════════════════════════════════════════════════ -->
+<div id="view-admin-setup" class="view">
+  <div class="container-fluid py-4 px-3 px-md-4" style="max-width:900px">
+
+    <ul class="nav nav-tabs mb-4" id="setup-tabs">
+      <li class="nav-item"><button class="nav-link active" data-tab="tab-assembly" onclick="switchTab(this,'tab-assembly')"><i class="bi bi-info-circle me-1"></i>Assembleia</button></li>
+      <li class="nav-item"><button class="nav-link" data-tab="tab-units" onclick="switchTab(this,'tab-units')"><i class="bi bi-houses me-1"></i>Unidades</button></li>
+      <li class="nav-item"><button class="nav-link" data-tab="tab-pautas" onclick="switchTab(this,'tab-pautas')"><i class="bi bi-list-check me-1"></i>Pautas</button></li>
+      <li class="nav-item"><button class="nav-link" data-tab="tab-launch" onclick="switchTab(this,'tab-launch')"><i class="bi bi-rocket me-1"></i>Iniciar</button></li>
+    </ul>
+
+    <!-- Tab Assembleia -->
+    <div id="tab-assembly">
+      <div class="card">
+        <div class="card-header"><i class="bi bi-pencil-square me-2"></i>Dados da Assembleia</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-8">
+              <label class="form-label">Nome da Assembleia *</label>
+              <input id="asm-name" type="text" class="form-control" placeholder="Ex.: Assembleia Ordinária 2026"/>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Data *</label>
+              <input id="asm-date" type="date" class="form-control"/>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Descrição / Local</label>
+              <textarea id="asm-desc" class="form-control" rows="2" placeholder="Ex.: Salão de Festas — 19h"></textarea>
+            </div>
+          </div>
+          <button class="btn btn-primary mt-3" onclick="saveAssembly()"><i class="bi bi-save me-2"></i>Salvar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Unidades -->
+    <div id="tab-units" style="display:none">
+      <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-house-add me-2"></i>Cadastrar Unidade</span>
+          <label class="btn btn-sm btn-outline-light mb-0" style="cursor:pointer">
+            <i class="bi bi-upload me-1"></i>Importar CSV
+            <input type="file" accept=".csv" style="display:none" onchange="importUnitsCSV(this)"/>
+          </label>
+        </div>
+        <div class="card-body">
+          <div class="row g-2">
+            <div class="col-sm-3"><input id="u-number" class="form-control" placeholder="Unidade *" onkeydown="if(event.key==='Enter')addUnit()"/></div>
+            <div class="col-sm-4"><input id="u-owner" class="form-control" placeholder="Nome do proprietário *" onkeydown="if(event.key==='Enter')addUnit()"/></div>
+            <div class="col-sm-3"><input id="u-cpf" class="form-control" placeholder="CPF (opcional)"/></div>
+            <div class="col-sm-2"><button class="btn btn-success w-100" onclick="addUnit()"><i class="bi bi-plus-lg"></i></button></div>
+          </div>
+          <div class="text-muted small mt-2">CSV: colunas <strong>numero, proprietario, cpf</strong> (cabeçalho obrigatório)</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><i class="bi bi-list-ul me-2"></i>Unidades Cadastradas (<span id="units-count">0</span>)</div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover mb-0" id="units-table">
+              <thead class="table-light"><tr><th>Unidade</th><th>Proprietário</th><th>CPF</th><th></th></tr></thead>
+              <tbody id="units-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Pautas -->
+    <div id="tab-pautas" style="display:none">
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-plus-circle me-2"></i>Adicionar Pauta</div>
+        <div class="card-body">
+          <div class="row g-2">
+            <div class="col-sm-6"><input id="p-title" class="form-control" placeholder="Título da pauta *"/></div>
+            <div class="col-sm-3">
+              <select id="p-quorum" class="form-select">
+                <option value="simples">Maioria simples</option>
+                <option value="2/3">2/3 dos presentes</option>
+                <option value="unanimidade">Unanimidade</option>
+              </select>
+            </div>
+            <div class="col-sm-3"><button class="btn btn-success w-100" onclick="addPauta()"><i class="bi bi-plus-lg me-1"></i>Adicionar</button></div>
+            <div class="col-12"><textarea id="p-desc" class="form-control" rows="2" placeholder="Descrição (opcional)"></textarea></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><i class="bi bi-list-check me-2"></i>Pautas Cadastradas</div>
+        <div class="card-body p-0">
+          <div id="pautas-list-setup" class="list-group list-group-flush"></div>
+          <div id="pautas-empty" class="text-center text-muted p-4 small">Nenhuma pauta cadastrada ainda.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Iniciar -->
+    <div id="tab-launch" style="display:none">
+      <div class="card">
+        <div class="card-header"><i class="bi bi-rocket me-2"></i>Iniciar Assembleia</div>
+        <div class="card-body">
+          <div id="launch-checklist" class="mb-4"></div>
+          <div class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>
+            Código de acesso para participantes:
+            <strong id="access-code-display" class="ms-2 fs-5 text-primary">—</strong>
+            <button class="btn btn-sm btn-outline-secondary ms-3" onclick="regenerateCode()" title="Gerar novo código"><i class="bi bi-arrow-clockwise"></i></button>
+          </div>
+          <div id="launch-btn-wrap">
+            <button class="btn btn-success btn-lg" onclick="openAssembly()" id="btn-open-assembly">
+              <i class="bi bi-play-circle me-2"></i>Abrir Assembleia para Votação
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     VIEW: ADMIN DASHBOARD
+════════════════════════════════════════════════════════════════════ -->
+<div id="view-admin-dashboard" class="view">
+  <div class="container-fluid py-3 px-3 px-md-4" style="max-width:1100px">
+
+    <!-- Barra de ações -->
+    <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+      <h5 class="mb-0 me-auto"><i class="bi bi-speedometer2 me-2"></i>Painel ao vivo</h5>
+      <button class="btn btn-sm btn-outline-secondary" onclick="showView('view-admin-setup')"><i class="bi bi-gear me-1"></i>Configurações</button>
+      <button class="btn btn-sm btn-outline-danger" onclick="closeAssembly()"><i class="bi bi-stop-circle me-1"></i>Encerrar Assembleia</button>
+      <button class="btn btn-sm btn-success" onclick="exportPDF()"><i class="bi bi-file-pdf me-1"></i>PDF</button>
+      <button class="btn btn-sm btn-success" onclick="exportExcel()"><i class="bi bi-file-excel me-1"></i>Excel</button>
+    </div>
+
+    <div class="row g-3">
+      <!-- Pautas + controles -->
+      <div class="col-lg-7">
+        <div class="card h-100">
+          <div class="card-header"><i class="bi bi-list-check me-2"></i>Pautas &amp; Votação</div>
+          <div class="card-body" id="admin-pautas-list"></div>
+        </div>
+      </div>
+
+      <!-- Participantes e procurações -->
+      <div class="col-lg-5">
+        <div class="card mb-3">
+          <div class="card-header"><i class="bi bi-people me-2"></i>Participantes (<span id="voters-count">0</span>)</div>
+          <div class="card-body p-0" style="max-height:200px;overflow-y:auto">
+            <ul class="list-group list-group-flush" id="voters-list"></ul>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><i class="bi bi-file-earmark-text me-2"></i>Procurações</div>
+          <div class="card-body p-0" style="max-height:200px;overflow-y:auto">
+            <ul class="list-group list-group-flush" id="proxy-list"></ul>
+            <div id="proxy-empty" class="text-center text-muted p-3 small">Nenhuma procuração enviada ainda.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resultados gráficos -->
+    <div class="row g-3 mt-1" id="charts-row"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     VIEW: PARTICIPANT JOIN
+════════════════════════════════════════════════════════════════════ -->
+<div id="view-participant-join" class="view">
+  <div class="container" style="max-width:520px; padding-top:60px">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-door-open me-2"></i>Entrar na Assembleia</div>
+      <div class="card-body p-4">
+        <div class="mb-3">
+          <label class="form-label">Código de acesso *</label>
+          <input id="join-code" type="text" class="form-control text-uppercase" maxlength="6" placeholder="Ex.: AB12CD"
+                 oninput="this.value=this.value.toUpperCase()"/>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Seu nome completo *</label>
+          <input id="join-name" type="text" class="form-control" placeholder="Nome como consta no cadastro"/>
+        </div>
+        <div id="join-error" class="text-danger small mb-2" style="display:none"></div>
+        <button class="btn btn-primary w-100" onclick="joinAssembly()">
+          <i class="bi bi-arrow-right-circle me-2"></i>Continuar
+        </button>
+        <button class="btn btn-link w-100 mt-2" onclick="showView('view-landing')">← Voltar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     VIEW: PARTICIPANT REGISTER UNITS
+════════════════════════════════════════════════════════════════════ -->
+<div id="view-participant-units" class="view">
+  <div class="container" style="max-width:600px; padding-top:40px">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-house-check me-2"></i>Unidades que você irá votar</div>
+      <div class="card-body p-4">
+        <p class="text-muted small">Selecione sua(s) unidade(s). Se você é inquilino ou representante de outra unidade, adicione-a e faça o upload da procuração.</p>
+
+        <div id="unit-entries"></div>
+
+        <button class="btn btn-outline-primary btn-sm mt-2" onclick="addUnitEntry()">
+          <i class="bi bi-plus-circle me-1"></i>Adicionar outra unidade
+        </button>
+
+        <hr/>
+        <button class="btn btn-primary w-100" onclick="confirmParticipantUnits()">
+          <i class="bi bi-check-circle me-2"></i>Confirmar e entrar na assembleia
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     VIEW: PARTICIPANT VOTING
+════════════════════════════════════════════════════════════════════ -->
+<div id="view-voting" class="view">
+  <div class="container" style="max-width:700px; padding-top:30px; padding-bottom:40px">
+
+    <div class="alert alert-success d-flex align-items-center mb-3">
+      <i class="bi bi-person-check-fill me-2 fs-5"></i>
+      <div>
+        Registrado como <strong id="voter-display-name"></strong>
+        — Votando pelas unidades: <span id="voter-display-units"></span>
+      </div>
+    </div>
+
+    <div id="voting-pautas"></div>
+
+    <div id="voting-empty" class="text-center text-muted p-5" style="display:none">
+      <i class="bi bi-hourglass-split fs-1 d-block mb-3"></i>
+      Aguardando o administrador abrir uma pauta para votação…
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     VIEW: ASSEMBLY CLOSED (participante)
+════════════════════════════════════════════════════════════════════ -->
+<div id="view-closed" class="view">
+  <div class="container" style="max-width:600px; padding-top:80px; text-align:center">
+    <div class="card p-4">
+      <i class="bi bi-check-circle-fill text-success fs-1 mb-3"></i>
+      <h4>Assembleia encerrada</h4>
+      <p class="text-muted">Obrigado pela participação! Os resultados finais foram registrados.</p>
+      <div id="final-results-participant" class="text-start mt-3"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Procuração -->
+<div class="modal fade" id="modalProxy" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-file-earmark-text me-2"></i>Procuração — <span id="proxy-modal-unit"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-center" id="proxy-modal-body" style="min-height:300px"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ══════════════════════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════════════════════
+const S = {
+  role: null,           // 'admin' | 'participant'
+  adminToken: null,
+  assembly: null,
+  units: [],
+  pautas: [],
+  results: {},
+  voters: [],
+  proxies: [],
+  // Participant
+  participantName: '',
+  participantUnits: [],  // [{ unitId, isOwner, proxyFile }]
+  voterId: null,
+  myVotes: {},           // { pautaId: { unitId: vote } }
+  charts: {},
+};
+
+const socket = io();
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SOCKET EVENTS
+// ══════════════════════════════════════════════════════════════════════════════
+socket.on('state_sync', (data) => {
+  S.assembly = data.assembly;
+  S.units = data.units || [];
+  S.pautas = data.pautas || [];
+  refreshUI();
+});
+
+socket.on('results_update', (results) => {
+  S.results = results;
+  if (S.role === 'admin') renderAdminResults();
+  if (S.role === 'participant') renderVotingPautas();
+});
+
+socket.on('pauta_opened', ({ pautaId, title }) => {
+  toast(`Votação aberta: "${title}"`, 'success');
+  if (S.role === 'participant') renderVotingPautas();
+});
+
+socket.on('pauta_closed', ({ pautaId, title }) => {
+  toast(`Votação encerrada: "${title}"`, 'warning');
+  if (S.role === 'participant') renderVotingPautas();
+});
+
+socket.on('voter_registered', (voter) => {
+  S.voters = S.voters.filter(v => v.id !== voter.id);
+  S.voters.push(voter);
+  renderVotersList();
+});
+
+socket.on('proxy_uploaded', ({ unitId, unitNumber, fileName }) => {
+  const existing = S.proxies.find(p => p.unitId === unitId);
+  if (!existing) S.proxies.push({ unitId, unitNumber: unitNumber || unitId, fileName });
+  else existing.fileName = fileName;
+  renderProxyList();
+  toast(`Procuração enviada: Unidade ${unitNumber}`, 'info');
+});
+
+socket.on('registration_ok', ({ voterId }) => {
+  S.voterId = voterId;
+  showView('view-voting');
+  renderVotingPautas();
+});
+
+socket.on('error', ({ message }) => toast(message, 'danger'));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════════════════════════════════════
+function showView(id) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  const el = document.getElementById(id);
+  if (el) {
+    el.classList.add('active');
+    // landing is flex, others are block
+    if (id === 'view-landing') el.style.display = 'flex';
+    else el.style.display = 'block';
+  }
+}
+
+function switchTab(btn, tabId) {
+  document.querySelectorAll('#setup-tabs .nav-link').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  ['tab-assembly','tab-units','tab-pautas','tab-launch'].forEach(t => {
+    document.getElementById(t).style.display = (t === tabId) ? 'block' : 'none';
+  });
+  if (tabId === 'tab-launch') renderLaunchChecklist();
+}
+
+function logout() {
+  S.role = null; S.adminToken = null; S.participantName = ''; S.participantUnits = []; S.voterId = null;
+  document.getElementById('topbar').style.display = 'none';
+  showView('view-landing');
+}
+
+function refreshUI() {
+  if (S.role === 'admin') {
+    if (S.assembly) {
+      document.getElementById('asm-name').value = S.assembly.name || '';
+      document.getElementById('asm-date').value = S.assembly.date || '';
+      document.getElementById('asm-desc').value = S.assembly.description || '';
+      document.getElementById('access-code-display').textContent = S.assembly.accessCode || '—';
+      document.getElementById('topbar-assembly-name').textContent = S.assembly.name || '';
+    }
+    renderUnitsTable();
+    renderPautasSetup();
+    if (S.assembly && S.assembly.status === 'open') {
+      renderAdminDashboard();
+    }
+  }
+  if (S.role === 'participant') {
+    if (S.assembly && S.assembly.status === 'closed') {
+      showClosed();
+    } else if (S.voterId) {
+      renderVotingPautas();
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ADMIN AUTH
+// ══════════════════════════════════════════════════════════════════════════════
+async function adminLogin() {
+  const pwd = document.getElementById('admin-password').value;
+  showSpinner(true);
+  try {
+    const r = await apiFetch('/api/admin/login', 'POST', { password: pwd });
+    if (r.success) {
+      S.role = 'admin';
+      S.adminToken = r.token;
+      document.getElementById('topbar').style.display = 'flex';
+      document.getElementById('topbar-role').textContent = 'Administrador';
+      socket.emit('admin_connect', { token: S.adminToken });
+      showView('view-admin-setup');
+      renderUnitsTable();
+      renderPautasSetup();
+    }
+  } catch(e) {
+    document.getElementById('admin-login-error').textContent = e.message;
+    document.getElementById('admin-login-error').style.display = 'block';
+  } finally { showSpinner(false); }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ASSEMBLY
+// ══════════════════════════════════════════════════════════════════════════════
+async function saveAssembly() {
+  const name = document.getElementById('asm-name').value.trim();
+  const date = document.getElementById('asm-date').value;
+  const description = document.getElementById('asm-desc').value.trim();
+  if (!name || !date) { toast('Preencha nome e data', 'danger'); return; }
+  showSpinner(true);
+  try {
+    const method = S.assembly ? 'PUT' : 'POST';
+    const r = await apiFetch('/api/assembly', method, { name, date, description });
+    S.assembly = r;
+    document.getElementById('access-code-display').textContent = r.accessCode;
+    document.getElementById('topbar-assembly-name').textContent = r.name;
+    toast('Assembleia salva com sucesso!', 'success');
+    switchTab(document.querySelector('[data-tab="tab-units"]'), 'tab-units');
+  } catch(e) { toast(e.message, 'danger'); } finally { showSpinner(false); }
+}
+
+async function regenerateCode() {
+  try {
+    const r = await apiFetch('/api/assembly/regenerate-code', 'POST', {});
+    document.getElementById('access-code-display').textContent = r.accessCode;
+    if (S.assembly) S.assembly.accessCode = r.accessCode;
+    toast('Código regenerado!', 'success');
+  } catch(e) { toast(e.message, 'danger'); }
+}
+
+async function openAssembly() {
+  if (!confirm('Abrir a assembleia para votação? Os participantes poderão entrar.')) return;
+  showSpinner(true);
+  try {
+    await apiFetch('/api/assembly/open', 'POST', {});
+    S.assembly.status = 'open';
+    showView('view-admin-dashboard');
+    renderAdminDashboard();
+    toast('Assembleia aberta!', 'success');
+  } catch(e) { toast(e.message, 'danger'); } finally { showSpinner(false); }
+}
+
+async function closeAssembly() {
+  if (!confirm('Encerrar a assembleia? A votação será fechada para todos.')) return;
+  showSpinner(true);
+  try {
+    await apiFetch('/api/assembly/close', 'POST', {});
+    S.assembly.status = 'closed';
+    toast('Assembleia encerrada.', 'warning');
+    showView('view-admin-setup');
+  } catch(e) { toast(e.message, 'danger'); } finally { showSpinner(false); }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// UNITS
+// ══════════════════════════════════════════════════════════════════════════════
+async function addUnit() {
+  const number = document.getElementById('u-number').value.trim();
+  const ownerName = document.getElementById('u-owner').value.trim();
+  const ownerCpf = document.getElementById('u-cpf').value.trim();
+  if (!number || !ownerName) { toast('Informe o número da unidade e o proprietário', 'danger'); return; }
+  try {
+    const u = await apiFetch('/api/units', 'POST', { number, ownerName, ownerCpf });
+    S.units.push(u);
+    renderUnitsTable();
+    document.getElementById('u-number').value = '';
+    document.getElementById('u-owner').value = '';
+    document.getElementById('u-cpf').value = '';
+    document.getElementById('u-number').focus();
+    toast(`Unidade ${number} adicionada`, 'success');
+  } catch(e) { toast(e.message, 'danger'); }
+}
+
+async function deleteUnit(id) {
+  if (!confirm('Remover esta unidade?')) return;
+  try {
+    await apiFetch(`/api/units/${id}`, 'DELETE', null);
+    S.units = S.units.filter(u => u.id !== id);
+    renderUnitsTable();
+  } catch(e) { toast(e.message, 'danger'); }
+}
+
+function renderUnitsTable() {
+  const tbody = document.getElementById('units-tbody');
+  document.getElementById('units-count').textContent = S.units.length;
+  tbody.innerHTML = S.units.map(u => `
+    <tr>
+      <td><strong>${esc(u.number)}</strong></td>
+      <td>${esc(u.ownerName)}</td>
+      <td><small class="text-muted">${esc(u.ownerCpf)}</small></td>
+      <td class="text-end"><button class="btn btn-sm btn-outline-danger" onclick="deleteUnit('${u.id}')"><i class="bi bi-trash"></i></button></td>
+    </tr>`).join('');
+}
+
+async function importUnitsCSV(input) {
+  const file = input.files[0]; if (!file) return;
+  const text = await file.text();
+  const rows = text.split('\n').map(r => r.split(',').map(c => c.trim().replace(/^"|"$/g,'')));
+  const header = rows[0].map(h => h.toLowerCase());
+  const numIdx = header.indexOf('numero'); const ownerIdx = header.indexOf('proprietario'); const cpfIdx = header.indexOf('cpf');
+  if (numIdx < 0 || ownerIdx < 0) { toast('CSV precisa ter colunas: numero, proprietario, cpf', 'danger'); return; }
+  const units = rows.slice(1).filter(r => r.length > 1 && r[numIdx]).map(r => ({
+    number: r[numIdx], ownerName: r[ownerIdx] || '', ownerCpf: cpfIdx >= 0 ? (r[cpfIdx] || '') : ''
+  }));
+  showSpinner(true);
+  try {
+    const res = await apiFetch('/api/units/batch', 'POST', { units });
+    const full = await apiFetch('/api/units', 'GET', null);
+    S.units = full;
+    renderUnitsTable();
+    toast(`${res.added} unidades importadas, ${res.skipped} ignoradas`, 'success');
+  } catch(e) { toast(e.message, 'danger'); } finally { showSpinner(false); input.value = ''; }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PAUTAS
+// ══════════════════════════════════════════════════════════════════════════════
+async function addPauta() {
+  const title = document.getElementById('p-title').value.trim();
+  const description = document.getElementById('p-desc').value.trim();
+  const quorum = document.getElementById('p-quorum').value;
+  if (!title) { toast('Informe o título da pauta', 'danger'); return; }
+  try {
+    const p = await apiFetch('/api/pautas', 'POST', { title, description, quorum });
+    S.pautas.push(p);
+    renderPautasSetup();
+    document.getElementById('p-title').value = '';
+    document.getElementById('p-desc').value = '';
+    toast(`Pauta "${title}" adicionada`, 'success');
+  } catch(e) { toast(e.message, 'danger'); }
+}
+
+async function deletePauta(id) {
+  if (!confirm('Remover esta pauta?')) return;
+  try {
+    await apiFetch(`/api/pautas/${id}`, 'DELETE', null);
+    S.pautas = S.pautas.filter(p => p.id !== id);
+    renderPautasSetup();
+  } catch(e) { toast(e.message, 'danger'); }
+}
+
+function renderPautasSetup() {
+  const list = document.getElementById('pautas-list-setup');
+  const empty = document.getElementById('pautas-empty');
+  empty.style.display = S.pautas.length ? 'none' : 'block';
+  list.innerHTML = S.pautas.map((p,i) => `
+    <div class="list-group-item d-flex align-items-center gap-2">
+      <span class="badge bg-secondary">${i+1}</span>
+      <div class="flex-grow-1">
+        <strong>${esc(p.title)}</strong>
+        <small class="text-muted ms-2">Quórum: ${esc(p.quorum)}</small>
+        ${p.description ? `<div class="small text-muted">${esc(p.description)}</div>` : ''}
+      </div>
+      <button class="btn btn-sm btn-outline-danger" onclick="deletePauta('${p.id}')"><i class="bi bi-trash"></i></button>
+    </div>`).join('');
+}
+
+function renderLaunchChecklist() {
+  const checks = [
+    { ok: !!S.assembly, label: 'Assembleia configurada' },
+    { ok: S.units.length >= 1, label: `Unidades cadastradas (${S.units.length})` },
+    { ok: S.pautas.length >= 1, label: `Pautas cadastradas (${S.pautas.length})` },
+  ];
+  const html = checks.map(c => `
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <i class="bi ${c.ok ? 'bi-check-circle-fill text-success' : 'bi-x-circle-fill text-danger'}"></i>
+      <span>${c.label}</span>
+    </div>`).join('');
+  document.getElementById('launch-checklist').innerHTML = html;
+  const ready = checks.every(c => c.ok);
+  document.getElementById('btn-open-assembly').disabled = !ready;
+  if (S.assembly) document.getElementById('access-code-display').textContent = S.assembly.accessCode || '—';
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ADMIN DASHBOARD
+// ══════════════════════════════════════════════════════════════════════════════
+function renderAdminDashboard() {
+  renderAdminPautasList();
+  renderAdminResults();
+  renderVotersList();
+  renderProxyList();
+}
+
+async function openPauta(id) {
+  try { await apiFetch(`/api/pautas/${id}/open`, 'POST', {}); } catch(e) { toast(e.message,'danger'); }
+}
+async function closePauta(id) {
+  try { await apiFetch(`/api/pautas/${id}/close`, 'POST', {}); } catch(e) { toast(e.message,'danger'); }
+}
+
+function renderAdminPautasList() {
+  const container = document.getElementById('admin-pautas-list');
+  if (!container) return;
+  container.innerHTML = S.pautas.map(p => {
+    const r = S.results[p.id] || { sim:0, nao:0, abstencao:0, total:0 };
+    const badgeClass = p.status === 'open' ? 'badge-open' : p.status === 'closed' ? 'badge-closed' : 'badge-pending';
+    const statusLabel = p.status === 'open' ? '🟢 Aberta' : p.status === 'closed' ? '🔴 Encerrada' : '⚪ Pendente';
+    return `
+      <div class="pauta-card card mb-3 ${p.status === 'closed' ? 'closed' : ''}">
+        <div class="card-body pb-2">
+          <div class="d-flex align-items-start gap-2 mb-2">
+            <span class="badge ${badgeClass} mt-1">${statusLabel}</span>
+            <div class="flex-grow-1">
+              <strong>${esc(p.title)}</strong>
+              <small class="text-muted ms-2">Quórum: ${esc(p.quorum)}</small>
+            </div>
+            ${p.status === 'pending' ? `<button class="btn btn-sm btn-success" onclick="openPauta('${p.id}')"><i class="bi bi-play-fill me-1"></i>Abrir</button>` : ''}
+            ${p.status === 'open'    ? `<button class="btn btn-sm btn-danger"  onclick="closePauta('${p.id}')"><i class="bi bi-stop-fill me-1"></i>Fechar</button>` : ''}
+          </div>
+          ${renderMiniResults(r)}
+        </div>
+      </div>`;
+  }).join('') || '<p class="text-muted small">Nenhuma pauta cadastrada.</p>';
+}
+
+function renderMiniResults(r) {
+  const total = r.total || 1;
+  const pSim = Math.round(r.sim / total * 100);
+  const pNao = Math.round(r.nao / total * 100);
+  const pAbs = Math.round(r.abstencao / total * 100);
+  return `
+    <div class="row g-1 mb-1">
+      <div class="col-4">
+        <div class="result-bar-wrap"><div class="result-bar bar-sim" style="width:${pSim}%">${r.sim}</div></div>
+        <small class="text-success">Sim (${pSim}%)</small>
+      </div>
+      <div class="col-4">
+        <div class="result-bar-wrap"><div class="result-bar bar-nao" style="width:${pNao}%">${r.nao}</div></div>
+        <small class="text-danger">Não (${pNao}%)</small>
+      </div>
+      <div class="col-4">
+        <div class="result-bar-wrap"><div class="result-bar bar-abs" style="width:${pAbs}%">${r.abstencao}</div></div>
+        <small class="text-warning">Abstenção (${pAbs}%)</small>
+      </div>
+    </div>
+    <small class="text-muted">Total de votos: ${r.total} / ${S.units.length} unidades</small>`;
+}
+
+function renderAdminResults() {
+  renderAdminPautasList();
+  renderCharts();
+}
+
+function renderCharts() {
+  const row = document.getElementById('charts-row'); if (!row) return;
+  const openOrClosed = S.pautas.filter(p => p.status !== 'pending');
+  if (!openOrClosed.length) { row.innerHTML = ''; return; }
+
+  // Criar canvas se necessário
+  openOrClosed.forEach(p => {
+    const canvasId = `chart-${p.id}`;
+    if (!document.getElementById(canvasId)) {
+      const col = document.createElement('div');
+      col.className = 'col-md-4 col-sm-6';
+      col.innerHTML = `<div class="card"><div class="card-header small py-2">${esc(p.title)}</div>
+        <div class="card-body text-center"><canvas id="${canvasId}" height="200"></canvas></div></div>`;
+      row.appendChild(col);
+    }
+    const r = S.results[p.id] || { sim:0, nao:0, abstencao:0 };
+    const canvas = document.getElementById(canvasId);
+    if (S.charts[p.id]) { S.charts[p.id].destroy(); }
+    S.charts[p.id] = new Chart(canvas, {
+      type: 'doughnut',
+      data: {
+        labels: ['Sim','Não','Abstenção'],
+        datasets: [{ data: [r.sim, r.nao, r.abstencao], backgroundColor: ['#27ae60','#c0392b','#f39c12'] }]
+      },
+      options: { plugins: { legend: { position: 'bottom' } }, cutout: '55%' }
+    });
+  });
+}
+
+function renderVotersList() {
+  const el = document.getElementById('voters-list'); if (!el) return;
+  document.getElementById('voters-count').textContent = S.voters.length;
+  el.innerHTML = S.voters.map(v => `
+    <li class="list-group-item d-flex align-items-center gap-2 py-2">
+      <i class="bi bi-person-fill text-primary"></i>
+      <span class="flex-grow-1">${esc(v.name)}</span>
+      <small class="text-muted">${(v.unitIds||[]).length} unid.</small>
+    </li>`).join('') || '<li class="list-group-item text-muted small">Nenhum participante ainda.</li>';
+}
+
+function renderProxyList() {
+  const el = document.getElementById('proxy-list'); if (!el) return;
+  const empty = document.getElementById('proxy-empty');
+  empty.style.display = S.proxies.length ? 'none' : 'block';
+  el.innerHTML = S.proxies.map(p => `
+    <li class="list-group-item d-flex align-items-center gap-2 py-2">
+      <i class="bi bi-file-earmark-check text-warning"></i>
+      <span class="flex-grow-1 small">Unid. <strong>${esc(p.unitNumber || p.unitId)}</strong> — ${esc(p.fileName)}</span>
+      <button class="btn btn-sm btn-outline-secondary" onclick="viewProxy('${p.unitId}','${esc(p.unitNumber || p.unitId)}')">
+        <i class="bi bi-eye"></i>
+      </button>
+    </li>`).join('');
+}
+
+async function viewProxy(unitId, unitNumber) {
+  document.getElementById('proxy-modal-unit').textContent = 'Unidade ' + unitNumber;
+  document.getElementById('proxy-modal-body').innerHTML = '<div class="spinner-border text-primary"></div>';
+  const modal = new bootstrap.Modal(document.getElementById('modalProxy'));
+  modal.show();
+  try {
+    const res = await fetch(`/api/proxy/${unitId}`, { headers: { 'x-admin-token': S.adminToken } });
+    const ct = res.headers.get('content-type') || '';
+    if (ct.includes('pdf')) {
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      document.getElementById('proxy-modal-body').innerHTML = `<iframe src="${url}" style="width:100%;height:500px;border:0"></iframe>`;
+    } else {
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      document.getElementById('proxy-modal-body').innerHTML = `<img src="${url}" class="img-fluid"/>`;
+    }
+  } catch(e) { document.getElementById('proxy-modal-body').innerHTML = '<p class="text-danger">Erro ao carregar arquivo.</p>'; }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PARTICIPANT FLOW
+// ══════════════════════════════════════════════════════════════════════════════
+async function joinAssembly() {
+  const code = document.getElementById('join-code').value.trim().toUpperCase();
+  const name = document.getElementById('join-name').value.trim();
+  const errEl = document.getElementById('join-error');
+  errEl.style.display = 'none';
+  if (!code || !name) { errEl.textContent = 'Preencha todos os campos.'; errEl.style.display = 'block'; return; }
+
+  // Verificar se assembleia tem o código (state já foi sincronizado via socket)
+  if (!S.assembly || S.assembly.accessCode !== code) {
+    errEl.textContent = 'Código de acesso inválido. Verifique com o administrador.';
+    errEl.style.display = 'block'; return;
+  }
+  if (S.assembly.status !== 'open') {
+    errEl.textContent = 'A assembleia ainda não foi aberta para participantes.';
+    errEl.style.display = 'block'; return;
+  }
+
+  S.participantName = name;
+  S.role = 'participant';
+  document.getElementById('topbar').style.display = 'flex';
+  document.getElementById('topbar-role').textContent = 'Participante';
+  document.getElementById('topbar-assembly-name').textContent = S.assembly.name;
+
+  showView('view-participant-units');
+  // Adicionar uma entrada de unidade inicial
+  document.getElementById('unit-entries').innerHTML = '';
+  addUnitEntry();
+}
+
+let unitEntryCount = 0;
+function addUnitEntry() {
+  unitEntryCount++;
+  const id = 'ue-' + unitEntryCount;
+  const options = S.units.map(u => `<option value="${u.id}">${esc(u.number)} — ${esc(u.ownerName)}</option>`).join('');
+  const html = `
+    <div class="border rounded p-3 mb-3" id="${id}">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <strong class="small">Unidade ${unitEntryCount}</strong>
+        ${unitEntryCount > 1 ? `<button class="btn btn-sm btn-outline-danger" onclick="removeUnitEntry('${id}')"><i class="bi bi-x"></i></button>` : ''}
+      </div>
+      <div class="mb-2">
+        <label class="form-label small">Selecione a unidade *</label>
+        <select class="form-select ue-select" id="${id}-sel">
+          <option value="">— selecione —</option>
+          ${options}
+        </select>
+      </div>
+      <div class="mb-2">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="${id}-owner" checked onchange="toggleProxyUpload('${id}')"/>
+          <label class="form-check-label small" for="${id}-owner">Sou o proprietário desta unidade</label>
+        </div>
+      </div>
+      <div id="${id}-proxy-wrap" style="display:none">
+        <div class="alert alert-warning py-2 small mb-2">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          Você precisa anexar a <strong>procuração assinada pelo proprietário</strong> para que seu voto seja válido.
+        </div>
+        <input type="file" class="form-control form-control-sm ue-proxy" id="${id}-proxy" accept=".pdf,.jpg,.jpeg,.png"
+               onchange="handleProxyFile(this, '${id}')"/>
+        <div id="${id}-proxy-status" class="small mt-1"></div>
+      </div>
+    </div>`;
+  document.getElementById('unit-entries').insertAdjacentHTML('beforeend', html);
+}
+
+function removeUnitEntry(id) {
+  document.getElementById(id)?.remove();
+}
+
+function toggleProxyUpload(id) {
+  const isOwner = document.getElementById(id + '-owner').checked;
+  document.getElementById(id + '-proxy-wrap').style.display = isOwner ? 'none' : 'block';
+}
+
+// Armazena o arquivo temporariamente no DOM para envio posterior
+function handleProxyFile(input, entryId) {
+  const file = input.files[0];
+  const statusEl = document.getElementById(entryId + '-proxy-status');
+  if (file) {
+    statusEl.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>${esc(file.name)}</span>`;
+  }
+}
+
+async function confirmParticipantUnits() {
+  const entries = document.querySelectorAll('[id^="ue-"]');
+  const selected = [];
+  let valid = true;
+
+  for (const entry of entries) {
+    if (!entry.id.match(/^ue-\d+$/)) continue;
+    const id = entry.id;
+    const unitId = document.getElementById(id + '-sel').value;
+    const isOwner = document.getElementById(id + '-owner').checked;
+    const proxyInput = document.getElementById(id + '-proxy');
+
+    if (!unitId) { toast('Selecione uma unidade em cada entrada', 'danger'); valid = false; break; }
+    if (!isOwner && (!proxyInput.files || !proxyInput.files[0])) {
+      toast('Anexe a procuração para a unidade ' + (document.getElementById(id + '-sel').selectedOptions[0]?.text || ''), 'danger');
+      valid = false; break;
+    }
+    selected.push({ unitId, isOwner, proxyFile: (!isOwner && proxyInput.files) ? proxyInput.files[0] : null });
+  }
+
+  if (!valid) return;
+  if (!selected.length) { toast('Selecione ao menos uma unidade', 'danger'); return; }
+
+  showSpinner(true);
+  try {
+    // Upload procurações
+    for (const item of selected) {
+      if (item.proxyFile) {
+        const fd = new FormData();
+        fd.append('proxy', item.proxyFile);
+        const r = await fetch(`/api/proxy/${item.unitId}`, { method: 'POST', body: fd });
+        if (!r.ok) { const e = await r.json(); throw new Error(e.error || 'Erro no upload'); }
+      }
+    }
+
+    S.participantUnits = selected;
+    const unitIds = selected.map(s => s.unitId);
+
+    // Registrar via socket
+    socket.emit('register_voter', {
+      name: S.participantName,
+      accessCode: S.assembly.accessCode,
+      unitIds,
+    });
+
+    // registration_ok listener vai chamar showView('view-voting')
+    document.getElementById('voter-display-name').textContent = S.participantName;
+    document.getElementById('voter-display-units').innerHTML = selected.map(s => {
+      const unit = S.units.find(u => u.id === s.unitId);
+      return `<span class="unit-tag">${esc(unit?.number || s.unitId)}</span>`;
+    }).join('');
+  } catch(e) { toast(e.message, 'danger'); } finally { showSpinner(false); }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// VOTING
+// ══════════════════════════════════════════════════════════════════════════════
+function renderVotingPautas() {
+  const container = document.getElementById('voting-pautas'); if (!container) return;
+  const openPautas = S.pautas.filter(p => p.status === 'open' || p.status === 'closed');
+
+  if (!openPautas.length) {
+    document.getElementById('voting-empty').style.display = 'block';
+    container.innerHTML = '';
+    return;
+  }
+  document.getElementById('voting-empty').style.display = 'none';
+
+  container.innerHTML = S.pautas.filter(p => p.status !== 'pending').map(p => {
+    const isOpen = p.status === 'open';
+    const myVotesForPauta = S.myVotes[p.id] || {};
+
+    const unitBlocks = S.participantUnits.map(({ unitId }) => {
+      const unit = S.units.find(u => u.id === unitId);
+      const myVote = myVotesForPauta[unitId];
+      const btns = ['Sim','Não','Abstenção'].map(opt => {
+        const voted = myVote === opt;
+        const disabled = !isOpen || !!myVote;
+        return `<button class="btn btn-sm vote-btn me-1 mb-1 ${
+          opt==='Sim' ? 'btn-outline-success' : opt==='Não' ? 'btn-outline-danger' : 'btn-outline-warning'
+        } ${voted ? 'voted active' : ''}" ${disabled ? 'disabled' : ''} onclick="castVote('${p.id}','${unitId}','${opt}')">
+          <i class="bi bi-${opt==='Sim'?'hand-thumbs-up':opt==='Não'?'hand-thumbs-down':'dash-circle'} me-1"></i>${opt}
+        </button>`;
+      }).join('');
+
+      return `<div class="mb-2">
+        <span class="unit-tag me-1">${esc(unit?.number || unitId)}</span>
+        ${myVote ? `<span class="badge bg-${myVote==='Sim'?'success':myVote==='Não'?'danger':'warning'} me-2">${myVote}</span>` : ''}
+        <br class="d-md-none"/>${btns}
+      </div>`;
+    }).join('');
+
+    return `
+      <div class="card pauta-card mb-3 ${!isOpen ? 'closed' : ''}">
+        <div class="card-body">
+          <div class="d-flex align-items-center gap-2 mb-3">
+            <span class="badge ${isOpen ? 'badge-open' : 'badge-closed'}">${isOpen ? '🟢 Votação aberta' : '🔴 Encerrada'}</span>
+            <strong>${esc(p.title)}</strong>
+          </div>
+          ${p.description ? `<p class="small text-muted mb-3">${esc(p.description)}</p>` : ''}
+          ${unitBlocks}
+          ${renderParticipantResult(p.id)}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderParticipantResult(pautaId) {
+  const r = S.results[pautaId]; if (!r) return '';
+  const total = r.total || 1;
+  return `<div class="mt-2 pt-2 border-top">
+    <small class="text-muted">Placar atual:
+      <strong class="text-success">Sim ${r.sim}</strong> ·
+      <strong class="text-danger">Não ${r.nao}</strong> ·
+      <strong class="text-warning">Abstenção ${r.abstencao}</strong>
+      (${r.total} votos de ${S.units.length} unidades)
+    </small>
+  </div>`;
+}
+
+async function castVote(pautaId, unitId, vote) {
+  try {
+    await apiFetch('/api/vote', 'POST', { pautaId, unitId, voterId: S.voterId, vote });
+    if (!S.myVotes[pautaId]) S.myVotes[pautaId] = {};
+    S.myVotes[pautaId][unitId] = vote;
+    renderVotingPautas();
+    toast(`Voto "${vote}" registrado!`, 'success');
+  } catch(e) { toast(e.message, 'danger'); }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CLOSED VIEW
+// ══════════════════════════════════════════════════════════════════════════════
+function showClosed() {
+  showView('view-closed');
+  const res = document.getElementById('final-results-participant');
+  res.innerHTML = '<h6 class="text-muted mb-3">Resultados Finais</h6>' +
+    S.pautas.map(p => {
+      const r = S.results[p.id] || { sim:0, nao:0, abstencao:0, total:0 };
+      return `<div class="mb-3">
+        <strong>${esc(p.title)}</strong>
+        <div class="small text-success">Sim: ${r.sim}</div>
+        <div class="small text-danger">Não: ${r.nao}</div>
+        <div class="small text-warning">Abstenção: ${r.abstencao}</div>
+        <div class="small text-muted">Total: ${r.total} votos</div>
+      </div>`;
+    }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EXPORT PDF
+// ══════════════════════════════════════════════════════════════════════════════
+function exportPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  const asm = S.assembly || {};
+  const dateStr = asm.date ? new Date(asm.date + 'T12:00:00').toLocaleDateString('pt-BR') : '';
+
+  // Cabeçalho
+  doc.setFillColor(26, 58, 92);
+  doc.rect(0, 0, 210, 30, 'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(16); doc.setFont('helvetica','bold');
+  doc.text('ATA DE VOTAÇÃO — ASSEMBLEIA CONDOMINIAL', 105, 13, { align: 'center' });
+  doc.setFontSize(11); doc.setFont('helvetica','normal');
+  doc.text(`${asm.name || ''}  |  ${dateStr}`, 105, 22, { align: 'center' });
+
+  doc.setTextColor(0,0,0);
+  let y = 38;
+
+  if (asm.description) {
+    doc.setFontSize(10); doc.setFont('helvetica','italic');
+    doc.text(asm.description, 14, y); y += 8;
+  }
+
+  doc.setFontSize(10); doc.setFont('helvetica','normal');
+  doc.text(`Total de unidades: ${S.units.length}`, 14, y);
+  doc.text(`Participantes registrados: ${S.voters.length}`, 105, y);
+  y += 10;
+
+  // Resultados por pauta
+  S.pautas.forEach((p, i) => {
+    const r = S.results[p.id] || { sim:0, nao:0, abstencao:0, total:0 };
+    const total = r.total || 0;
+    const pct = v => total > 0 ? ` (${Math.round(v/total*100)}%)` : '';
+
+    if (y > 250) { doc.addPage(); y = 20; }
+
+    doc.setFillColor(240,244,248);
+    doc.rect(12, y-5, 186, 8, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(11);
+    doc.text(`${i+1}. ${p.title}`, 14, y);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    doc.text(`Quórum: ${p.quorum}  |  Status: ${p.status}`, 155, y, { align: 'right' });
+    y += 6;
+
+    if (p.description) {
+      doc.setFontSize(9); doc.setFont('helvetica','italic');
+      const lines = doc.splitTextToSize(p.description, 180);
+      doc.text(lines, 14, y); y += lines.length * 4 + 2;
+    }
+
+    doc.autoTable({
+      startY: y,
+      head: [['Opção','Votos','%']],
+      body: [
+        ['✔ Sim', r.sim, total > 0 ? Math.round(r.sim/total*100)+'%' : '0%'],
+        ['✘ Não', r.nao, total > 0 ? Math.round(r.nao/total*100)+'%' : '0%'],
+        ['— Abstenção', r.abstencao, total > 0 ? Math.round(r.abstencao/total*100)+'%' : '0%'],
+        ['TOTAL', r.total, '100%'],
+      ],
+      styles: { fontSize: 10, halign: 'center' },
+      columnStyles: { 0: { halign: 'left', cellWidth: 80 } },
+      headStyles: { fillColor: [26, 58, 92] },
+      alternateRowStyles: { fillColor: [245, 247, 250] },
+      margin: { left: 14, right: 14 },
+      theme: 'striped',
+    });
+    y = doc.lastAutoTable.finalY + 8;
+
+    // Detalhes por unidade
+    if (S.votes[p.id] && Object.keys(S.votes[p.id]).length) {
+      const vRows = Object.entries(S.votes[p.id]).map(([uid, v]) => {
+        const unit = S.units.find(u => u.id === uid);
+        return [unit?.number || uid, unit?.ownerName || '—', v.vote, v.hasProxy ? 'Sim' : 'Não'];
+      });
+      doc.autoTable({
+        startY: y,
+        head: [['Unidade','Proprietário','Voto','Procuração']],
+        body: vRows,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [80, 100, 130] },
+        margin: { left: 14, right: 14 },
+        theme: 'grid',
+      });
+      y = doc.lastAutoTable.finalY + 10;
+    }
+  });
+
+  // Rodapé
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8); doc.setTextColor(150);
+    doc.text(`Gerado em ${new Date().toLocaleString('pt-BR')} — Página ${i}/${pageCount}`, 105, 292, { align: 'center' });
+  }
+
+  doc.save(`ata_votacao_${(asm.name||'assembleia').replace(/\s+/g,'_')}.pdf`);
+  toast('PDF exportado com sucesso!', 'success');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EXPORT EXCEL
+// ══════════════════════════════════════════════════════════════════════════════
+function exportExcel() {
+  const wb = XLSX.utils.book_new();
+  const asm = S.assembly || {};
+
+  // Aba: Resumo
+  const summaryData = [
+    ['ASSEMBLEIA CONDOMINIAL — RESULTADOS'],
+    [''],
+    ['Assembleia:', asm.name || ''],
+    ['Data:', asm.date || ''],
+    ['Descrição:', asm.description || ''],
+    ['Total de Unidades:', S.units.length],
+    ['Participantes:', S.voters.length],
+    ['Status:', asm.status || ''],
+    [''],
+    ['PAUTA','STATUS','SIM','NÃO','ABSTENÇÃO','TOTAL VOTOS','% SIM','% NÃO','% ABSTENCÃO'],
+    ...S.pautas.map(p => {
+      const r = S.results[p.id] || { sim:0, nao:0, abstencao:0, total:0 };
+      const t = r.total || 1;
+      return [p.title, p.status, r.sim, r.nao, r.abstencao, r.total,
+        +(r.sim/t*100).toFixed(1), +(r.nao/t*100).toFixed(1), +(r.abstencao/t*100).toFixed(1)];
+    }),
+  ];
+  const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+  XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumo');
+
+  // Aba: Votos por Unidade
+  const headers = ['Unidade','Proprietário','CPF', ...S.pautas.map(p => p.title)];
+  const rows = S.units.map(unit => {
+    const row = [unit.number, unit.ownerName, unit.ownerCpf];
+    S.pautas.forEach(p => {
+      const v = S.votes[p.id]?.[unit.id];
+      row.push(v ? v.vote : '—');
+    });
+    return row;
+  });
+  const wsVotes = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  XLSX.utils.book_append_sheet(wb, wsVotes, 'Votos por Unidade');
+
+  // Aba: Procurações
+  const proxHeaders = ['Unidade','Arquivo','Data de envio'];
+  const proxRows = Object.entries(S.votes).flatMap(([pautaId, pVotes]) =>
+    Object.entries(pVotes).filter(([,v]) => v.hasProxy).map(([uid, v]) => {
+      const unit = S.units.find(u => u.id === uid);
+      return [unit?.number || uid, '(arquivo no servidor)', v.timestamp];
+    })
+  );
+  const wsProxy = XLSX.utils.aoa_to_sheet([proxHeaders, ...proxRows]);
+  XLSX.utils.book_append_sheet(wb, wsProxy, 'Procurações');
+
+  XLSX.writeFile(wb, `resultados_${(asm.name||'assembleia').replace(/\s+/g,'_')}.xlsx`);
+  toast('Excel exportado com sucesso!', 'success');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════════════════════════════════════
+async function apiFetch(url, method, body) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': S.adminToken || '' },
+  };
+  if (body && method !== 'GET') opts.body = JSON.stringify(body);
+  const r = await fetch(url, opts);
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'Erro na requisição');
+  return data;
+}
+
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showSpinner(show) {
+  document.getElementById('spinner-overlay').classList.toggle('show', show);
+}
+
+function toast(msg, type = 'info') {
+  const id = 'toast-' + Date.now();
+  const icons = { success:'check-circle-fill', danger:'exclamation-triangle-fill', warning:'exclamation-circle-fill', info:'info-circle-fill' };
+  const html = `<div id="${id}" class="toast align-items-center text-bg-${type} border-0 show" role="alert">
+    <div class="d-flex"><div class="toast-body"><i class="bi bi-${icons[type]||'info-circle-fill'} me-2"></i>${esc(msg)}</div>
+    <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="document.getElementById('${id}').remove()"></button></div>
+  </div>`;
+  document.getElementById('toast-container').insertAdjacentHTML('beforeend', html);
+  setTimeout(() => document.getElementById(id)?.remove(), 4000);
+}
+
+// Definir data padrão
+document.getElementById('asm-date').value = new Date().toISOString().split('T')[0];
+</script>
+</body>
+</html>
