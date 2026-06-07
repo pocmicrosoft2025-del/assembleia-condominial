@@ -2,6 +2,194 @@
 
 Este documento registra as decisoes de produto, arquitetura e evolucao do sistema. A ideia e evitar que o projeto se perca conforme novas funcionalidades forem surgindo.
 
+## Contexto do Projeto
+
+Este projeto nasceu da necessidade de criar uma ferramenta para apoiar a apuracao de votos em assembleias condominiais.
+
+No cenario original, o problema era simples de explicar, mas delicado de resolver:
+
+- uma assembleia possui pautas a serem votadas;
+- cada unidade deve ter direito a apenas um voto por pauta;
+- um condomino pode representar mais de uma unidade;
+- um inquilino ou representante pode votar se tiver procuracao valida;
+- a procuracao precisa ser anexada e auditavel;
+- o resultado precisa ser exportado para registro e conferencia.
+
+Com a evolucao da ideia, ficou claro que o produto nao deveria ser apenas uma tela de votacao. Ele deve se tornar uma plataforma de apoio a assembleias condominiais, cobrindo desde a preparacao da reuniao ate a geracao da ata final.
+
+## O Que E o App
+
+O app e uma plataforma digital para gestao, conducao, votacao, registro e documentacao de assembleias condominiais.
+
+Ele combina:
+
+- cadastro de assembleias;
+- cadastro de unidades;
+- cadastro de votantes autorizados;
+- controle de procuracoes;
+- controle de presenca;
+- abertura e fechamento de pautas;
+- votacao por unidade;
+- apuracao em tempo real;
+- calculo de quorum;
+- painel administrativo;
+- tela de votacao para participantes;
+- modo de projecao;
+- exportacao de resultados;
+- geracao de ata;
+- historico e rastreabilidade.
+
+Na visao SaaS, cada cliente podera administrar seus condominios e assembleias dentro da mesma plataforma, com isolamento de dados, usuarios, permissoes e historico proprio.
+
+## Finalidade
+
+A finalidade do produto e reduzir falhas, discussoes e retrabalho em assembleias condominiais.
+
+O sistema deve ajudar o sindico, administradora ou condutor da assembleia a responder perguntas importantes:
+
+- quem podia votar?
+- quem estava presente?
+- qual unidade foi representada por quem?
+- havia procuracao?
+- a unidade ja votou nesta pauta?
+- qual foi o resultado?
+- o quorum foi atingido?
+- a ata reflete corretamente o que foi deliberado?
+- existe registro para auditoria posterior?
+
+O produto tambem busca transformar uma reuniao muitas vezes confusa e manual em um fluxo mais organizado, transparente e confiavel.
+
+## Publico-Alvo
+
+O publico inicial do produto e formado por:
+
+- sindicos profissionais;
+- sindicos moradores;
+- administradoras de condominios;
+- condominios de pequeno e medio porte;
+- condominios que realizam assembleias presenciais, hibridas ou online;
+- condutores de assembleia que precisam registrar votos, atas e documentos.
+
+No futuro, o produto pode atender tambem administradoras com varios condominios, exigindo recursos de multi-conta, permissoes e relatorios por carteira.
+
+## Problemas Que o Produto Resolve
+
+### Voto duplicado
+
+Uma unidade nao pode votar duas vezes na mesma pauta. O sistema deve bloquear duplicidade por unidade, mesmo que a pessoa tente recarregar a pagina, entrar novamente ou fazer uma requisicao manual.
+
+### Representacao por procuracao
+
+Representantes e inquilinos nao devem se autodeclarar autorizados. O votante autorizado deve ser cadastrado previamente pelo administrador, e a procuracao deve ser anexada antes da assembleia.
+
+### Apuracao manual
+
+Contagem manual de votos e sujeita a erro. O sistema deve apurar votos em tempo real e mostrar placares claros.
+
+### Quorum
+
+O sistema deve ajudar a verificar quorum de instalacao e quorum de aprovacao por pauta.
+
+### Ata e registro
+
+O produto deve reduzir a necessidade de escrever ata manualmente depois da reuniao. A meta e gerar ata formal com base em pautas, votos, presenca, procuracoes e, futuramente, transcricao.
+
+### Rastreabilidade
+
+Toda acao relevante precisa deixar rastro: abertura da assembleia, entrada de participante, voto, fechamento de pauta, resultado e exportacao.
+
+## Recursos Existentes no Protótipo Atual
+
+O prototipo atual ja contempla:
+
+- servidor Node.js com Express;
+- comunicacao em tempo real com Socket.io;
+- interface web em HTML/CSS/JavaScript;
+- login administrativo com senha;
+- limite de tentativas de login administrativo;
+- cadastro de assembleia;
+- cadastro de unidades;
+- cadastro de votante autorizado por unidade;
+- upload de procuracao;
+- cadastro de pautas;
+- abertura e fechamento de votacao por pauta;
+- voto unico por unidade em cada pauta;
+- suporte a condomino representando mais de uma unidade;
+- calculo de resultado por tipo de quorum;
+- painel administrativo;
+- tela de votacao do participante;
+- modo de projecao;
+- QR Code/codigo de acesso;
+- exportacao em PDF;
+- exportacao em Excel;
+- dados demo para simulacao;
+- persistencia local em `data.json`;
+- suporte inicial a PostgreSQL via `DATABASE_URL`;
+- fallback local quando nao ha banco configurado.
+
+## Recursos Planejados
+
+Os recursos planejados para a evolucao SaaS incluem:
+
+- contas de usuario;
+- multiplos condominios;
+- permissoes por papel;
+- banco PostgreSQL normalizado;
+- armazenamento de anexos em disco/servico de arquivos;
+- logs de auditoria;
+- historico completo de assembleias;
+- painel do cliente;
+- planos e assinatura;
+- cobranca por uso de IA/gravação;
+- integracao Daily para reuniao online;
+- gravacao da assembleia;
+- transcricao por OpenAI;
+- geracao de ata por IA;
+- revisao humana da ata;
+- exportacao e armazenamento da ata final;
+- manual operacional;
+- documentacao tecnica completa.
+
+## Inicio, Meio e Fim do Produto
+
+### Inicio
+
+O produto comeca como uma ferramenta para preparar e conduzir votacoes condominiais com seguranca minima:
+
+- cadastrar unidades;
+- definir votantes autorizados;
+- anexar procuracoes;
+- votar por pauta;
+- impedir duplicidade;
+- exportar resultado.
+
+### Meio
+
+O produto evolui para uma plataforma SaaS operavel:
+
+- varios condominios;
+- usuarios e permissoes;
+- historico;
+- banco estruturado;
+- backups;
+- hospedagem em VPS;
+- painel administrativo;
+- primeira oferta comercial.
+
+### Fim Desejado
+
+O produto se torna uma plataforma completa de assembleias digitais:
+
+- reuniao online integrada;
+- gravacao;
+- transcricao;
+- ata por IA;
+- trilha de auditoria;
+- documentos vinculados;
+- cobranca recorrente;
+- uso por sindicos e administradoras;
+- operacao comercial sustentavel.
+
 ## Visao do Produto
 
 O sistema deixa de ser apenas um app local de votacao e passa a ser tratado como uma plataforma SaaS para assembleias condominiais digitais.
