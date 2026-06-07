@@ -6,6 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const path    = require('path');
 const fs      = require('fs');
 const crypto  = require('crypto');
+const { Pool } = require('pg');
 
 const app    = express();
 const server = http.createServer(app);
@@ -14,9 +15,11 @@ const io     = new Server(server, { maxHttpBufferSize: 10 * 1024 * 1024 });
 const PORT           = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const DATA_FILE      = path.join(__dirname, 'data.json');
+const DATABASE_URL   = process.env.DATABASE_URL || '';
 const ADMIN_SESSION_MS = 8 * 60 * 60 * 1000;
 const ADMIN_LOGIN_MAX_ATTEMPTS = 5;
 const ADMIN_LOGIN_LOCK_MS = 15 * 60 * 1000;
+const STATE_ROW_KEY = 'main';
 
 // ─── Estado em memória ────────────────────────────────────────────────────────
 // units[]:  { id, number, ownerName, ownerCpf,
@@ -42,23 +45,129 @@ let state = {
 };
 
 // ─── Persistência ─────────────────────────────────────────────────────────────
-function saveState() {
+let dbPool = null;
+let useDatabase = false;
+let saveStatePromise = Promise.resolve();
+
+function getRuntimeState() {
+  return {
+    adminSockets: state.adminSockets instanceof Set ? state.adminSockets : new Set(),
+    pautaTimers: state.pautaTimers || {},
+    adminSessions: state.adminSessions instanceof Map ? state.adminSessions : new Map(),
+    adminLoginAttempts: state.adminLoginAttempts instanceof Map ? state.adminLoginAttempts : new Map(),
+  };
+}
+
+function getPersistableState() {
+  const { adminSockets, pautaTimers, adminSessions, adminLoginAttempts, ...toSave } = state;
+  return toSave;
+}
+
+function applyPersistedState(data) {
+  const runtime = getRuntimeState();
+  Object.assign(state, data || {});
+  state.adminSockets = runtime.adminSockets;
+  state.pautaTimers = runtime.pautaTimers;
+  state.adminSessions = runtime.adminSessions;
+  state.adminLoginAttempts = runtime.adminLoginAttempts;
+  state.assembly = state.assembly || null;
+  state.units = Array.isArray(state.units) ? state.units : [];
+  state.pautas = Array.isArray(state.pautas) ? state.pautas : [];
+  state.voters = state.voters || {};
+  state.votes = state.votes || {};
+  state.proxies = state.proxies || {};
+}
+
+function createDbPool() {
+  if (!DATABASE_URL) return null;
+  return new Pool({
+    connectionString: DATABASE_URL,
+    ssl: process.env.PGSSLMODE === 'require' || process.env.DATABASE_SSL === 'true'
+      ? { rejectUnauthorized: false }
+      : undefined,
+  });
+}
+
+async function initDatabase() {
+  if (!DATABASE_URL) return false;
+  dbPool = createDbPool();
+  await dbPool.query(`
+    CREATE TABLE IF NOT EXISTS app_state (
+      key TEXT PRIMARY KEY,
+      value JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  useDatabase = true;
+  return true;
+}
+
+function loadStateFromFile() {
+  if (!fs.existsSync(DATA_FILE)) return false;
+  const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+  applyPersistedState(data);
+  console.log('✅  Estado anterior carregado de data.json');
+  return true;
+}
+
+async function saveStateNow() {
+  const toSave = getPersistableState();
+  if (useDatabase && dbPool) {
+    await dbPool.query(
+      `INSERT INTO app_state (key, value, updated_at)
+       VALUES ($1, $2::jsonb, NOW())
+       ON CONFLICT (key)
+       DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+      [STATE_ROW_KEY, JSON.stringify(toSave)]
+    );
+    return;
+  }
+
   try {
-    const { adminSockets, pautaTimers, adminSessions, ...toSave } = state;
     fs.writeFileSync(DATA_FILE, JSON.stringify(toSave, null, 2));
   } catch (e) { console.error('Erro ao salvar estado:', e.message); }
 }
 
-function loadState() {
-  try {
-    if (fs.existsSync(DATA_FILE)) {
-      const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-      Object.assign(state, data);
-      console.log('✅  Estado anterior carregado de data.json');
-    }
-  } catch (e) { console.error('Erro ao carregar estado:', e.message); }
+function saveState() {
+  saveStatePromise = saveStatePromise
+    .then(() => saveStateNow())
+    .catch(e => console.error('Erro ao salvar estado:', e.message));
 }
-loadState();
+
+async function loadState() {
+  try {
+    const dbReady = await initDatabase();
+    if (dbReady) {
+      const row = await dbPool.query('SELECT value FROM app_state WHERE key = $1', [STATE_ROW_KEY]);
+      if (row.rows.length) {
+        applyPersistedState(row.rows[0].value);
+        console.log('✅  Estado anterior carregado do PostgreSQL');
+        return;
+      }
+      if (fs.existsSync(DATA_FILE)) {
+        const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        applyPersistedState(data);
+        await saveStateNow();
+        console.log('✅  Estado migrado de data.json para PostgreSQL');
+        return;
+      }
+      console.log('✅  PostgreSQL conectado; nenhum estado anterior encontrado');
+      return;
+    }
+
+    loadStateFromFile();
+  } catch (e) {
+    console.error('Erro ao carregar estado:', e.message);
+    if (DATABASE_URL) {
+      console.error('⚠️  DATABASE_URL configurada, mas o PostgreSQL não pôde ser usado.');
+      try {
+        if (loadStateFromFile()) console.error('⚠️  Usando fallback local data.json.');
+      } catch (fallbackError) {
+        console.error('Erro ao carregar fallback data.json:', fallbackError.message);
+      }
+    }
+  }
+}
 
 // ─── Multer ───────────────────────────────────────────────────────────────────
 const upload = multer({
@@ -824,15 +933,25 @@ app.post('/api/admin/seed', (req, res) => {
     adminSockets: state.adminSockets,
     pautaTimers : {},
     adminSessions: state.adminSessions,
+    adminLoginAttempts: state.adminLoginAttempts,
   };
   broadcastState(); broadcastResults(); saveState();
   res.json({ ok: true, message: 'Demo carregado! Código de acesso: DEMO01' });
 });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n✅  Servidor rodando em http://localhost:${PORT}`);
-  console.log(`🔑  Senha do administrador configurada por ADMIN_PASSWORD${ADMIN_PASSWORD === 'admin123' ? ' (usando padrão local)' : ''}`);
-  console.log(`\n   Para acessar de outros dispositivos na mesma rede:`);
-  console.log(`   Descubra o IP desta máquina e acesse http://SEU_IP:${PORT}\n`);
+async function startServer() {
+  await loadState();
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n✅  Servidor rodando em http://localhost:${PORT}`);
+    console.log(`💾  Persistência: ${useDatabase ? 'PostgreSQL' : 'data.json local'}`);
+    console.log(`🔑  Senha do administrador configurada por ADMIN_PASSWORD${ADMIN_PASSWORD === 'admin123' ? ' (usando padrão local)' : ''}`);
+    console.log(`\n   Para acessar de outros dispositivos na mesma rede:`);
+    console.log(`   Descubra o IP desta máquina e acesse http://SEU_IP:${PORT}\n`);
+  });
+}
+
+startServer().catch(err => {
+  console.error('Erro fatal ao iniciar servidor:', err);
+  process.exit(1);
 });
