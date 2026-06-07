@@ -15,6 +15,8 @@ const PORT           = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const DATA_FILE      = path.join(__dirname, 'data.json');
 const ADMIN_SESSION_MS = 8 * 60 * 60 * 1000;
+const ADMIN_LOGIN_MAX_ATTEMPTS = 5;
+const ADMIN_LOGIN_LOCK_MS = 15 * 60 * 1000;
 
 // ─── Estado em memória ────────────────────────────────────────────────────────
 // units[]:  { id, number, ownerName, ownerCpf,
@@ -36,6 +38,7 @@ let state = {
   adminSockets: new Set(),
   pautaTimers : {},
   adminSessions: new Map(),
+  adminLoginAttempts: new Map(),
 };
 
 // ─── Persistência ─────────────────────────────────────────────────────────────
@@ -103,6 +106,23 @@ function isAdminToken(token) {
   }
   state.adminSessions.set(token, Date.now() + ADMIN_SESSION_MS);
   return true;
+}
+function getClientKey(req) {
+  const forwarded = (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return forwarded || req.socket.remoteAddress || req.ip || 'unknown';
+}
+function getLoginAttempt(key) {
+  const current = state.adminLoginAttempts.get(key);
+  if (!current) return { count: 0, lockedUntil: 0 };
+  if (current.lockedUntil && current.lockedUntil <= Date.now()) {
+    state.adminLoginAttempts.delete(key);
+    return { count: 0, lockedUntil: 0 };
+  }
+  return current;
+}
+function formatRemainingLock(ms) {
+  const minutes = Math.ceil(ms / 60000);
+  return `${minutes} minuto${minutes === 1 ? '' : 's'}`;
 }
 function publicUnits() {
   return state.units.map(u => ({
@@ -219,10 +239,40 @@ function broadcastState()   {
 // ─── Admin: login ─────────────────────────────────────────────────────────────
 app.post('/api/admin/login', (req, res) => {
   const { password } = req.body;
-  if (password === ADMIN_PASSWORD)
+  const clientKey = getClientKey(req);
+  const attempt = getLoginAttempt(clientKey);
+
+  if (attempt.lockedUntil && attempt.lockedUntil > Date.now()) {
+    const remainingMs = attempt.lockedUntil - Date.now();
+    return res.status(429).json({
+      error: `Muitas tentativas incorretas. Tente novamente em ${formatRemainingLock(remainingMs)}.`,
+      locked: true,
+      retryAfterMs: remainingMs,
+    });
+  }
+
+  if (password === ADMIN_PASSWORD) {
+    state.adminLoginAttempts.delete(clientKey);
     res.json({ success: true, token: createAdminToken() });
-  else
-    res.status(401).json({ error: 'Senha incorreta' });
+  } else {
+    const nextCount = attempt.count + 1;
+    const lockedUntil = nextCount >= ADMIN_LOGIN_MAX_ATTEMPTS ? Date.now() + ADMIN_LOGIN_LOCK_MS : 0;
+    state.adminLoginAttempts.set(clientKey, { count: nextCount, lockedUntil });
+
+    if (lockedUntil) {
+      return res.status(429).json({
+        error: `Senha incorreta. Limite de tentativas atingido. Tente novamente em ${formatRemainingLock(ADMIN_LOGIN_LOCK_MS)}.`,
+        locked: true,
+        attemptsRemaining: 0,
+        retryAfterMs: ADMIN_LOGIN_LOCK_MS,
+      });
+    }
+
+    res.status(401).json({
+      error: `Senha incorreta. Tentativas restantes: ${ADMIN_LOGIN_MAX_ATTEMPTS - nextCount}.`,
+      attemptsRemaining: ADMIN_LOGIN_MAX_ATTEMPTS - nextCount,
+    });
+  }
 });
 
 app.get('/api/assembly', (req, res) => {
