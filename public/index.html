@@ -717,19 +717,6 @@ socket.on('state_sync', (data) => {
 
 socket.on('results_update', (results) => {
   S.results = results;
-  // Sync myVotes for participant
-  if (S.role === 'participant' && S.voterId) {
-    for (const [pautaId, r] of Object.entries(results)) {
-      if (r.votes) {
-        for (const uid of S.participantUnits.map(u => u.unitId)) {
-          if (r.votes[uid]) {
-            if (!S.myVotes[pautaId]) S.myVotes[pautaId] = {};
-            S.myVotes[pautaId][uid] = r.votes[uid].vote;
-          }
-        }
-      }
-    }
-  }
   renderAdminPautasList();
   renderVotingPautas();
   renderProjection();
@@ -767,11 +754,12 @@ socket.on('proxy_uploaded', ({ unitId, unitNumber, fileName }) => {
   renderProxyList();
 });
 
-socket.on('registration_ok', ({ voterId, voter }) => {
+socket.on('registration_ok', ({ voterId, voter, existingVotes }) => {
   S.voterId = voterId;
   if (voter) {
     S.participantName = voter.name;
   }
+  if (existingVotes) S.myVotes = existingVotes;
   showView('view-voting');
   renderVotingPautas();
 });
@@ -871,7 +859,9 @@ async function adminLogin() {
 
 async function loadDemoAndEnter() {
   try {
-    const r = await apiFetch('/api/admin/login', 'POST', { password: 'admin123' });
+    const password = getVal('admin-password');
+    if (!password) { toast('Informe a senha do administrador para carregar o demo', 'warning'); return; }
+    const r = await apiFetch('/api/admin/login', 'POST', { password });
     if (r.success) {
       S.adminToken = r.token;
       S.role = 'admin';
@@ -999,21 +989,28 @@ async function addUnit() {
   };
   if (!body.number || !body.ownerName || !body.ownerCpf) { toast('Preencha unidade, proprietário e CPF', 'warning'); return; }
   if (!isOwner && (!body.voterName || !body.voterCpf)) { toast('Informe nome e CPF do representante', 'warning'); return; }
+  const proxyInput = document.getElementById('unit-proxy-file');
+  if (!isOwner && (!proxyInput || !proxyInput.files || !proxyInput.files[0])) {
+    toast('Anexe a procuração do representante antes de cadastrar a unidade', 'warning');
+    return;
+  }
   try {
     const data = await apiFetch('/api/units', 'POST', body);
     const newUnit = data.unit || data;
     S.units.push(newUnit);
 
-    // Upload proxy if provided
-    const proxyInput = document.getElementById('unit-proxy-file');
     if (!isOwner && proxyInput && proxyInput.files && proxyInput.files[0] && newUnit.id) {
       const fd = new FormData();
       fd.append('proxy', proxyInput.files[0]);
-      await fetch(`/api/proxy/${newUnit.id}`, {
+      const proxyRes = await fetch(`/api/proxy/${newUnit.id}`, {
         method: 'POST',
         body: fd,
         headers: { 'x-admin-token': S.adminToken }
       });
+      if (!proxyRes.ok) {
+        const err = await proxyRes.json().catch(() => ({}));
+        throw new Error(err.error || 'Erro ao enviar procuração');
+      }
     }
 
     clearUnitForm();
@@ -1178,6 +1175,10 @@ function renderLaunchChecklist() {
   const hasUnits = S.units.length > 0;
   const hasPautas = S.pautas.length > 0;
   const isOpen = S.assembly && S.assembly.status === 'open';
+  const missingProxyUnits = S.units.filter(u => {
+    const av = u.authorizedVoter || {};
+    return av.isOwner === false && !av.hasProxy;
+  });
 
   el.innerHTML = `
     <div class="checklist-item">
@@ -1191,6 +1192,10 @@ function renderLaunchChecklist() {
     <div class="checklist-item">
       <i class="bi ${hasPautas ? 'bi-check-circle-fill check-ok' : 'bi-x-circle-fill check-warn'}"></i>
       <span>Pautas cadastradas <strong>(${S.pautas.length})</strong></span>
+    </div>
+    <div class="checklist-item">
+      <i class="bi ${missingProxyUnits.length === 0 ? 'bi-check-circle-fill check-ok' : 'bi-x-circle-fill check-warn'}"></i>
+      <span>Procurações de representantes ${missingProxyUnits.length === 0 ? '<strong>em ordem</strong>' : `<strong>pendentes (${missingProxyUnits.length})</strong>`}</span>
     </div>
     <div class="checklist-item">
       <i class="bi ${isOpen ? 'bi-check-circle-fill check-ok' : 'bi-dash-circle check-warn'}"></i>
@@ -1520,14 +1525,6 @@ async function joinAssembly() {
 
     document.getElementById('join-preview').style.display = '';
 
-    if (data.alreadyRegistered) {
-      S.voterId = data.voterId || data.id;
-      S.participantName = data.voterName || data.name;
-      S.participantUnits = data.units || [];
-      S.role = 'participant';
-      showView('view-voting');
-      renderVotingPautas();
-    }
   } catch(e) { toast(e.message, 'danger'); }
 }
 

@@ -5,6 +5,7 @@ const multer  = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const path    = require('path');
 const fs      = require('fs');
+const crypto  = require('crypto');
 
 const app    = express();
 const server = http.createServer(app);
@@ -13,6 +14,7 @@ const io     = new Server(server, { maxHttpBufferSize: 10 * 1024 * 1024 });
 const PORT           = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const DATA_FILE      = path.join(__dirname, 'data.json');
+const ADMIN_SESSION_MS = 8 * 60 * 60 * 1000;
 
 // ─── Estado em memória ────────────────────────────────────────────────────────
 // units[]:  { id, number, ownerName, ownerCpf,
@@ -33,12 +35,13 @@ let state = {
   proxies     : {},
   adminSockets: new Set(),
   pautaTimers : {},
+  adminSessions: new Map(),
 };
 
 // ─── Persistência ─────────────────────────────────────────────────────────────
 function saveState() {
   try {
-    const { adminSockets, pautaTimers, ...toSave } = state;
+    const { adminSockets, pautaTimers, adminSessions, ...toSave } = state;
     fs.writeFileSync(DATA_FILE, JSON.stringify(toSave, null, 2));
   } catch (e) { console.error('Erro ao salvar estado:', e.message); }
 }
@@ -72,11 +75,99 @@ app.use(express.static(path.join(__dirname, 'public')));
 function generateCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
+function createAdminToken() {
+  const token = crypto.randomBytes(32).toString('hex');
+  state.adminSessions.set(token, Date.now() + ADMIN_SESSION_MS);
+  return token;
+}
 function isAdmin(req) {
-  return req.headers['x-admin-token'] === 'admin-authenticated';
+  const token = req.headers['x-admin-token'];
+  if (!token || !state.adminSessions.has(token)) return false;
+  const expiresAt = state.adminSessions.get(token);
+  if (expiresAt < Date.now()) {
+    state.adminSessions.delete(token);
+    return false;
+  }
+  state.adminSessions.set(token, Date.now() + ADMIN_SESSION_MS);
+  return true;
 }
 function normCpf(cpf) {
   return (cpf || '').replace(/\D/g, '');
+}
+function isAdminToken(token) {
+  if (!token || !state.adminSessions.has(token)) return false;
+  const expiresAt = state.adminSessions.get(token);
+  if (expiresAt < Date.now()) {
+    state.adminSessions.delete(token);
+    return false;
+  }
+  state.adminSessions.set(token, Date.now() + ADMIN_SESSION_MS);
+  return true;
+}
+function publicUnits() {
+  return state.units.map(u => ({
+    id: u.id,
+    number: u.number,
+  }));
+}
+function publicPautas() {
+  return state.pautas.map(p => ({ ...p }));
+}
+function publicAssembly() {
+  return state.assembly ? { ...state.assembly } : null;
+}
+function statePayload(includePrivate = false) {
+  return {
+    assembly: publicAssembly(),
+    units   : includePrivate ? state.units : publicUnits(),
+    pautas  : publicPautas(),
+  };
+}
+function getPresentUnitIds() {
+  const ids = new Set();
+  Object.values(state.voters || {}).forEach(voter => {
+    (voter.unitIds || []).forEach(u => ids.add(u.unitId));
+  });
+  return ids;
+}
+function getExistingVotesForUnits(unitIds) {
+  const unitIdSet = new Set(unitIds);
+  const existing = {};
+  Object.entries(state.votes || {}).forEach(([pautaId, votesByUnit]) => {
+    Object.entries(votesByUnit || {}).forEach(([unitId, vote]) => {
+      if (unitIdSet.has(unitId)) {
+        if (!existing[pautaId]) existing[pautaId] = {};
+        existing[pautaId][unitId] = vote.vote;
+      }
+    });
+  });
+  return existing;
+}
+function getMissingProxyUnits() {
+  return state.units.filter(u => u.authorizedVoter?.isOwner === false && !state.proxies[u.id]);
+}
+function resultPayload(includePrivate = false) {
+  const results = {};
+  state.pautas.forEach(p => {
+    const pVotes    = state.votes[p.id] || {};
+    const vals      = Object.values(pVotes);
+    const sim       = vals.filter(v => v.vote === 'Sim').length;
+    const nao       = vals.filter(v => v.vote === 'Não').length;
+    const abstencao = vals.filter(v => v.vote === 'Abstenção').length;
+    results[p.id]   = {
+      pautaId     : p.id,
+      title       : p.title,
+      quorum      : p.quorum,
+      status      : p.status,
+      result      : p.result      || null,
+      resultDetail: p.resultDetail || null,
+      timerEnd    : p.timerEnd    || null,
+      sim, nao, abstencao,
+      total       : sim + nao + abstencao,
+    };
+    if (includePrivate) results[p.id].votes = pVotes;
+  });
+  return results;
 }
 
 function calculatePautaResult(pauta) {
@@ -113,45 +204,30 @@ function calculatePautaResult(pauta) {
 }
 
 function computeResults() {
-  const results = {};
-  state.pautas.forEach(p => {
-    const pVotes    = state.votes[p.id] || {};
-    const vals      = Object.values(pVotes);
-    const sim       = vals.filter(v => v.vote === 'Sim').length;
-    const nao       = vals.filter(v => v.vote === 'Não').length;
-    const abstencao = vals.filter(v => v.vote === 'Abstenção').length;
-    results[p.id]   = {
-      pautaId     : p.id,
-      title       : p.title,
-      quorum      : p.quorum,
-      status      : p.status,
-      result      : p.result      || null,
-      resultDetail: p.resultDetail || null,
-      timerEnd    : p.timerEnd    || null,
-      sim, nao, abstencao,
-      total       : sim + nao + abstencao,
-      votes       : pVotes,
-    };
-  });
-  return results;
+  return resultPayload(true);
 }
 
-function broadcastResults() { io.emit('results_update', computeResults()); }
+function broadcastResults() {
+  io.emit('results_update', resultPayload(false));
+  state.adminSockets.forEach(sid => io.to(sid).emit('results_update', resultPayload(true)));
+}
 function broadcastState()   {
-  io.emit('state_sync', {
-    assembly: state.assembly,
-    units   : state.units,
-    pautas  : state.pautas,
-  });
+  io.emit('state_sync', statePayload(false));
+  state.adminSockets.forEach(sid => io.to(sid).emit('state_sync', statePayload(true)));
 }
 
 // ─── Admin: login ─────────────────────────────────────────────────────────────
 app.post('/api/admin/login', (req, res) => {
   const { password } = req.body;
   if (password === ADMIN_PASSWORD)
-    res.json({ success: true, token: 'admin-authenticated' });
+    res.json({ success: true, token: createAdminToken() });
   else
     res.status(401).json({ error: 'Senha incorreta' });
+});
+
+app.get('/api/assembly', (req, res) => {
+  if (isAdmin(req)) return res.json(state.assembly);
+  res.json(publicAssembly());
 });
 
 // ─── Assembleia ───────────────────────────────────────────────────────────────
@@ -175,7 +251,7 @@ app.post('/api/assembly', (req, res) => {
     createdAt    : new Date().toISOString(),
   };
   state.units = []; state.pautas = []; state.voters = {};
-  state.votes = []; state.proxies = {}; state.pautaTimers = {};
+  state.votes = {}; state.proxies = {}; state.pautaTimers = {};
 
   broadcastState(); saveState();
   res.json(state.assembly);
@@ -206,7 +282,15 @@ app.post('/api/assembly/open', (req, res) => {
   if (!isAdmin(req)) return res.status(403).json({ error: 'Não autorizado' });
   if (!state.assembly) return res.status(404).json({ error: 'Assembleia não criada' });
 
-  const present     = Object.keys(state.voters).length;
+  const missingProxyUnits = getMissingProxyUnits();
+  if (missingProxyUnits.length) {
+    return res.status(400).json({
+      error: `Há representante sem procuração anexada: unidade(s) ${missingProxyUnits.map(u => u.number).join(', ')}.`,
+      missingProxyUnits: missingProxyUnits.map(u => ({ id: u.id, number: u.number })),
+    });
+  }
+
+  const present     = getPresentUnitIds().size;
   const minRequired = Math.ceil(state.units.length * (state.assembly.quorumInstall / 100));
 
   if (present < minRequired && state.units.length > 0) {
@@ -253,7 +337,9 @@ app.post('/api/assembly/close', (req, res) => {
 });
 
 // ─── Unidades ─────────────────────────────────────────────────────────────────
-app.get('/api/units', (req, res) => res.json(state.units));
+app.get('/api/units', (req, res) => {
+  res.json(isAdmin(req) ? state.units : publicUnits());
+});
 
 app.post('/api/units', (req, res) => {
   if (!isAdmin(req)) return res.status(403).json({ error: 'Não autorizado' });
@@ -264,6 +350,8 @@ app.post('/api/units', (req, res) => {
     return res.status(400).json({ error: `Unidade ${number} já cadastrada` });
 
   const ownerIsVoter = isOwner !== false;
+  if (!ownerIsVoter && (!voterName || !voterCpf))
+    return res.status(400).json({ error: 'Nome e CPF do representante são obrigatórios' });
   const unit = {
     id: uuidv4(),
     number   : String(number),
@@ -305,25 +393,33 @@ app.post('/api/units/batch', (req, res) => {
   const { units } = req.body;
   if (!Array.isArray(units)) return res.status(400).json({ error: 'Formato inválido' });
   let added = 0;
+  const created = [];
   units.forEach(u => {
     if (!u.numero || !u.proprietario || !u.cpf) return;
     if (state.units.find(e => e.number === String(u.numero))) return;
-    state.units.push({
+    const unit = {
       id: uuidv4(),
       number   : String(u.numero),
       ownerName: u.proprietario,
       ownerCpf : u.cpf,
       authorizedVoter: { name: u.proprietario, cpf: u.cpf, isOwner: true, hasProxy: false },
-    });
+    };
+    state.units.push(unit);
+    created.push(unit);
     added++;
   });
   broadcastState(); saveState();
-  res.json({ added });
+  res.json({ added, units: created });
 });
 
 app.delete('/api/units/:id', (req, res) => {
   if (!isAdmin(req)) return res.status(403).json({ error: 'Não autorizado' });
   state.units = state.units.filter(u => u.id !== req.params.id);
+  delete state.proxies[req.params.id];
+  Object.values(state.votes || {}).forEach(votesByUnit => delete votesByUnit[req.params.id]);
+  Object.values(state.voters || {}).forEach(v => {
+    v.unitIds = (v.unitIds || []).filter(u => u.unitId !== req.params.id);
+  });
   broadcastState(); saveState();
   res.json({ ok: true });
 });
@@ -341,6 +437,11 @@ app.post('/api/proxy/:unitId', upload.single('proxy'), (req, res) => {
     uploadedAt: new Date().toISOString(),
   };
   if (unit.authorizedVoter) unit.authorizedVoter.hasProxy = true;
+  io.emit('proxy_uploaded', {
+    unitId: unit.id,
+    unitNumber: unit.number,
+    fileName: req.file.originalname,
+  });
   broadcastState(); saveState();
   res.json({ success: true, fileName: req.file.originalname });
 });
@@ -508,8 +609,11 @@ app.post('/api/vote', (req, res) => {
 
   const voter = state.voters[voterId];
   if (!voter) return res.status(403).json({ error: 'Participante não registrado.' });
-  if (!voter.unitIds.some(u => u.unitId === unitId))
+  const voterUnit = voter.unitIds.find(u => u.unitId === unitId);
+  if (!voterUnit)
     return res.status(403).json({ error: 'Não autorizado a votar por esta unidade.' });
+  if (!voterUnit.isOwner && !state.proxies[unitId])
+    return res.status(403).json({ error: `A unidade ${unit.number} possui representante sem procuração anexada.` });
 
   state.votes[pautaId][unitId] = {
     vote, voterId,
@@ -523,7 +627,7 @@ app.post('/api/vote', (req, res) => {
 });
 
 // ─── Resultados / Participantes ───────────────────────────────────────────────
-app.get('/api/results', (req, res) => res.json(computeResults()));
+app.get('/api/results', (req, res) => res.json(resultPayload(isAdmin(req))));
 app.get('/api/voters',  (req, res) => {
   if (!isAdmin(req)) return res.status(403).json({ error: 'Não autorizado' });
   res.json(Object.values(state.voters));
@@ -531,12 +635,14 @@ app.get('/api/voters',  (req, res) => {
 
 // ─── Socket.io ────────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
-  socket.emit('state_sync', { assembly: state.assembly, units: state.units, pautas: state.pautas });
-  socket.emit('results_update', computeResults());
+  socket.emit('state_sync', statePayload(false));
+  socket.emit('results_update', resultPayload(false));
 
   socket.on('admin_connect', ({ token }) => {
-    if (token !== 'admin-authenticated') return;
+    if (!isAdminToken(token)) return;
     state.adminSockets.add(socket.id);
+    socket.emit('state_sync', statePayload(true));
+    socket.emit('results_update', resultPayload(true));
     socket.emit('admin_state', {
       voters : Object.values(state.voters),
       proxies: Object.keys(state.proxies).map(uid => ({
@@ -558,21 +664,30 @@ io.on('connection', (socket) => {
       socket.emit('error', { message: 'CPF não autorizado nesta assembleia.' }); return;
     }
 
+    Object.entries(state.voters || {}).forEach(([id, voter]) => {
+      if (id !== socket.id && normCpf(voter.cpf) === nc) delete state.voters[id];
+    });
+
+    const unitIds = authorizedUnits.map(u => ({
+      unitId  : u.id,
+      isOwner : u.authorizedVoter.isOwner,
+      hasProxy: !!state.proxies[u.id],
+    }));
     const voter = {
       id    : socket.id,
       name  : authorizedUnits[0].authorizedVoter.name,
       cpf,
-      unitIds: authorizedUnits.map(u => ({
-        unitId  : u.id,
-        isOwner : u.authorizedVoter.isOwner,
-        hasProxy: !!state.proxies[u.id],
-      })),
+      unitIds,
       registeredAt: new Date().toISOString(),
     };
     state.voters[socket.id] = voter;
     state.adminSockets.forEach(sid => io.to(sid).emit('voter_registered', voter));
     saveState();
-    socket.emit('registration_ok', { voterId: socket.id, voter });
+    socket.emit('registration_ok', {
+      voterId: socket.id,
+      voter,
+      existingVotes: getExistingVotesForUnits(unitIds.map(u => u.unitId)),
+    });
   });
 
   socket.on('disconnect', () => {
@@ -658,6 +773,7 @@ app.post('/api/admin/seed', (req, res) => {
     units, pautas, voters, votes, proxies: {},
     adminSockets: state.adminSockets,
     pautaTimers : {},
+    adminSessions: state.adminSessions,
   };
   broadcastState(); broadcastResults(); saveState();
   res.json({ ok: true, message: 'Demo carregado! Código de acesso: DEMO01' });
@@ -666,7 +782,7 @@ app.post('/api/admin/seed', (req, res) => {
 // ─── Start ────────────────────────────────────────────────────────────────────
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n✅  Servidor rodando em http://localhost:${PORT}`);
-  console.log(`🔑  Senha do administrador: ${ADMIN_PASSWORD}`);
+  console.log(`🔑  Senha do administrador configurada por ADMIN_PASSWORD${ADMIN_PASSWORD === 'admin123' ? ' (usando padrão local)' : ''}`);
   console.log(`\n   Para acessar de outros dispositivos na mesma rede:`);
   console.log(`   Descubra o IP desta máquina e acesse http://SEU_IP:${PORT}\n`);
 });
