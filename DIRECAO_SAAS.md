@@ -1,6 +1,16 @@
-# Direcao SaaS - Plataforma de Assembleias Condominiais
+# QuorumHub - Direcao SaaS da Plataforma de Assembleias Condominiais
 
 Este documento registra as decisoes de produto, arquitetura e evolucao do sistema. A ideia e evitar que o projeto se perca conforme novas funcionalidades forem surgindo.
+
+## Nome do Produto
+
+O nome de mercado escolhido para o produto e **QuorumHub**.
+
+O nome comunica a ideia de uma central de assembleias, quorum, votacao, atas, documentos e registros. A expressao "Sindico Digital" podera ser usada como linguagem comercial ou conceito de marketing, mas nao como marca principal.
+
+Descricao curta:
+
+**QuorumHub - Do quorum a ata, tudo em um so lugar.**
 
 ## Contexto do Projeto
 

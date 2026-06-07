@@ -1,7 +1,7 @@
 {
-  "name": "assembleia-condominial",
+  "name": "quorumhub",
   "version": "1.0.0",
-  "description": "Sistema de votação para assembleias condominiais",
+  "description": "QuorumHub - plataforma SaaS para assembleias condominiais",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

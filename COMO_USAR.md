@@ -1,4 +1,4 @@
-# Sistema de Votação — Assembleia Condominial
+# QuorumHub — Assembleias Condominiais
 
 ## Requisitos
 
@@ -9,7 +9,7 @@
 
 ## Instalação (apenas na primeira vez)
 
-1. **Delete a pasta `node_modules`** (se ela existir na pasta `assembleia-app`) — selecione e pressione Delete no Windows Explorer
+1. **Delete a pasta `node_modules`** (se ela existir na pasta `PROJETO QUORUM_HUB`) — selecione e pressione Delete no Windows Explorer
 2. Abra o **Prompt de Comando** nesta pasta  
    _(dica: na barra de endereço do Explorer, digite `cmd` e pressione Enter)_
 3. Execute:
@@ -28,7 +28,8 @@ node server.js
 O terminal mostrará algo como:
 ```
 ✅  Servidor rodando em http://localhost:3000
-🔑  Senha do administrador: admin123
+💾  Persistência: data.json local ou PostgreSQL
+🔑  Senha do administrador configurada por ADMIN_PASSWORD
 ```
 
 ---
