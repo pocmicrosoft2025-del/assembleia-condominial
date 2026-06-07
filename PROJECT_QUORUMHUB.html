@@ -1,0 +1,1270 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>QuorumHub - Project Tracker</title>
+  <style>
+    :root {
+      --olive-950: #17200f;
+      --olive-900: #263515;
+      --olive-800: #35461a;
+      --olive-700: #43551c;
+      --olive-500: #718238;
+      --gold-600: #be8d12;
+      --gold-500: #d6aa18;
+      --gold-300: #f2ca3d;
+      --paper: #f7f6f1;
+      --surface: #ffffff;
+      --surface-2: #eeece2;
+      --line: #dedbcc;
+      --graphite: #242821;
+      --muted: #73786a;
+      --red: #a33a2b;
+      --blue: #2f5f82;
+      --green: #3f7a35;
+      --shadow-sm: 0 1px 2px rgba(23, 32, 15, .06);
+      --shadow-md: 0 14px 34px rgba(23, 32, 15, .12);
+    }
+
+    * { box-sizing: border-box; }
+    html { background: var(--paper); }
+    body {
+      margin: 0;
+      color: var(--graphite);
+      font-family: Inter, "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.76), rgba(247,246,241,.94) 280px),
+        repeating-linear-gradient(90deg, rgba(38,53,21,.03) 0 1px, transparent 1px 84px),
+        var(--paper);
+      letter-spacing: 0;
+    }
+
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+
+    .app-shell { min-height: 100vh; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: linear-gradient(90deg, var(--olive-950), var(--olive-900) 58%, var(--olive-700));
+      color: #fff;
+      border-bottom: 3px solid var(--gold-500);
+      box-shadow: 0 12px 30px rgba(23, 32, 15, .22);
+    }
+
+    .topbar-inner {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 18px 24px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .mark {
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: var(--gold-500);
+      color: var(--olive-950);
+      font-weight: 900;
+      box-shadow: inset 0 -4px 0 rgba(0,0,0,.12);
+      flex: 0 0 auto;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 1.15rem;
+      line-height: 1.1;
+      font-weight: 800;
+    }
+
+    .brand p {
+      margin: 4px 0 0;
+      color: rgba(255,255,255,.72);
+      font-size: .88rem;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .btn {
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 10px 13px;
+      background: #fff;
+      color: var(--olive-900);
+      font-weight: 700;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn.primary {
+      background: linear-gradient(180deg, var(--gold-300), var(--gold-500));
+      color: var(--olive-950);
+    }
+
+    .btn.dark {
+      background: rgba(255,255,255,.1);
+      color: #fff;
+      border-color: rgba(255,255,255,.22);
+    }
+
+    .btn.ghost {
+      background: transparent;
+      color: var(--olive-900);
+      border-color: var(--line);
+      box-shadow: none;
+    }
+
+    .main {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(280px, .7fr);
+      gap: 18px;
+      align-items: stretch;
+      margin-bottom: 18px;
+    }
+
+    .panel {
+      background: rgba(255,255,255,.92);
+      border: 1px solid rgba(38,53,21,.13);
+      border-radius: 8px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .intro {
+      padding: 22px;
+      border-top: 5px solid var(--gold-500);
+    }
+
+    .intro h2 {
+      margin: 0 0 10px;
+      font-size: 1.55rem;
+      line-height: 1.1;
+      color: var(--olive-950);
+    }
+
+    .intro p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+      max-width: 980px;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .meta {
+      border-left: 4px solid var(--gold-500);
+      background: #fbfaf4;
+      padding: 12px;
+      border-radius: 8px;
+      min-height: 82px;
+    }
+
+    .meta span {
+      display: block;
+      color: var(--muted);
+      font-size: .78rem;
+      text-transform: uppercase;
+      font-weight: 800;
+    }
+
+    .meta strong {
+      display: block;
+      margin-top: 5px;
+      color: var(--olive-900);
+      font-size: .98rem;
+      line-height: 1.25;
+    }
+
+    .score {
+      padding: 20px;
+      display: grid;
+      align-content: center;
+      gap: 16px;
+    }
+
+    .score-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .progress-ring {
+      width: 108px;
+      height: 108px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at center, #fff 0 56%, transparent 57%),
+        conic-gradient(var(--green) var(--progress), var(--surface-2) 0);
+      border: 1px solid var(--line);
+      flex: 0 0 auto;
+    }
+
+    .progress-ring strong {
+      font-size: 1.45rem;
+      color: var(--olive-950);
+    }
+
+    .score h3 {
+      margin: 0;
+      color: var(--olive-950);
+      font-size: 1rem;
+    }
+
+    .score p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: .88rem;
+      line-height: 1.4;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .stat {
+      background: #fbfaf4;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      text-align: center;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 1.25rem;
+      color: var(--olive-900);
+    }
+
+    .stat span {
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) 190px 190px;
+      gap: 10px;
+      margin: 18px 0;
+      align-items: center;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .field label {
+      color: var(--muted);
+      font-size: .78rem;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .input, .select, .textarea {
+      width: 100%;
+      border: 1px solid #d4d0bf;
+      border-radius: 8px;
+      background: #fffefa;
+      color: var(--graphite);
+      padding: 10px 12px;
+      outline: none;
+    }
+
+    .textarea {
+      min-height: 74px;
+      resize: vertical;
+      line-height: 1.45;
+    }
+
+    .input:focus, .select:focus, .textarea:focus {
+      border-color: var(--gold-500);
+      box-shadow: 0 0 0 3px rgba(214,170,24,.18);
+    }
+
+    .phase-list {
+      display: grid;
+      gap: 14px;
+    }
+
+    .phase {
+      overflow: hidden;
+    }
+
+    .phase-header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      align-items: start;
+      padding: 18px;
+      background: linear-gradient(180deg, #fff, #fbfaf4);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .phase-title {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      min-width: 0;
+    }
+
+    .phase-number {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      background: var(--olive-900);
+      color: var(--gold-300);
+      font-weight: 900;
+      flex: 0 0 auto;
+    }
+
+    .phase h3 {
+      margin: 0;
+      color: var(--olive-950);
+      font-size: 1.08rem;
+    }
+
+    .phase-summary {
+      margin: 5px 0 0;
+      color: var(--muted);
+      line-height: 1.4;
+      font-size: .92rem;
+    }
+
+    .phase-meta {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: .76rem;
+      font-weight: 900;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    .pill.status-nao-iniciado { background: #efede3; color: #5d6255; border-color: #ddd8c8; }
+    .pill.status-em-andamento { background: #e7f0f7; color: var(--blue); border-color: #c6d9e6; }
+    .pill.status-pendente { background: #fff5d6; color: #7a5708; border-color: #ead181; }
+    .pill.status-bloqueado { background: #f9e0dc; color: var(--red); border-color: #e9b8b0; }
+    .pill.status-concluido { background: #e3f1df; color: var(--green); border-color: #bfd9b8; }
+
+    .phase-body {
+      padding: 16px 18px 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .phase-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .mini-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 11px;
+      background: #fffefa;
+      min-height: 76px;
+    }
+
+    .mini-card span {
+      display: block;
+      font-size: .74rem;
+      color: var(--muted);
+      font-weight: 900;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .mini-card strong, .mini-card p {
+      margin: 0;
+      color: var(--olive-900);
+      font-size: .9rem;
+      line-height: 1.35;
+    }
+
+    .deliverables {
+      display: grid;
+      gap: 8px;
+    }
+
+    .deliverable {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) 165px minmax(240px, .9fr);
+      gap: 10px;
+      align-items: start;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .deliverable-title strong {
+      display: block;
+      color: var(--graphite);
+      font-size: .94rem;
+    }
+
+    .deliverable-title span {
+      display: block;
+      color: var(--muted);
+      font-size: .82rem;
+      margin-top: 2px;
+      line-height: 1.35;
+    }
+
+    .notes {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .note-log {
+      display: grid;
+      gap: 8px;
+    }
+
+    .note {
+      background: #fbfaf4;
+      border-left: 4px solid var(--gold-500);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--graphite);
+      font-size: .9rem;
+      line-height: 1.45;
+    }
+
+    .note time {
+      display: block;
+      color: var(--muted);
+      font-size: .74rem;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+
+    .empty {
+      color: var(--muted);
+      font-size: .9rem;
+      padding: 14px;
+      border: 1px dashed #cac5b2;
+      border-radius: 8px;
+      background: rgba(255,255,255,.58);
+    }
+
+    .footer {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 0 24px 28px;
+      color: var(--muted);
+      font-size: .84rem;
+    }
+
+    .footer strong { color: var(--olive-900); }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 1100px) {
+      .hero { grid-template-columns: 1fr; }
+      .deliverable { grid-template-columns: 1fr; }
+      .phase-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 760px) {
+      .topbar-inner { grid-template-columns: 1fr; }
+      .toolbar { justify-content: flex-start; }
+      .main { padding: 16px; }
+      .meta-grid, .phase-grid, .controls, .notes { grid-template-columns: 1fr; }
+      .phase-header { grid-template-columns: 1fr; }
+      .phase-meta { justify-content: flex-start; }
+    }
+
+    @media print {
+      .topbar, .controls, .btn, .field.interactive { display: none !important; }
+      body { background: #fff; }
+      .main { padding: 0; }
+      .panel { box-shadow: none; break-inside: avoid; }
+      .phase { margin-bottom: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <div class="mark">QH</div>
+          <div>
+            <h1>QuorumHub - Project Tracker</h1>
+            <p>Fases, entregas, dependencias, prazos e observacoes do desenvolvimento.</p>
+          </div>
+        </div>
+        <div class="toolbar">
+          <button class="btn dark" id="btnPrint">Imprimir</button>
+          <button class="btn dark" id="btnReset">Restaurar arquivo</button>
+          <button class="btn primary" id="btnExport">Exportar HTML atualizado</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="hero">
+        <div class="panel intro">
+          <h2>Roteiro controlado para transformar o QuorumHub em SaaS.</h2>
+          <p>
+            Este documento acompanha a evolucao do projeto do prototipo local ate uma plataforma comercial.
+            Ele foi pensado para manter foco, registrar decisoes e evitar que novas ideias desorganizem a sequencia
+            tecnica e comercial do produto.
+          </p>
+          <div class="meta-grid" id="projectMeta"></div>
+        </div>
+
+        <aside class="panel score">
+          <div class="score-top">
+            <div>
+              <h3>Progresso Geral</h3>
+              <p>Calculado com base nas entregas marcadas como concluidas.</p>
+            </div>
+            <div class="progress-ring" id="progressRing" style="--progress:0deg"><strong id="progressText">0%</strong></div>
+          </div>
+          <div class="stats" id="stats"></div>
+        </aside>
+      </section>
+
+      <section class="controls">
+        <div class="field interactive">
+          <label for="search">Buscar</label>
+          <input class="input" id="search" placeholder="Digite fase, entrega, dependencia ou observacao..." />
+        </div>
+        <div class="field interactive">
+          <label for="statusFilter">Status</label>
+          <select class="select" id="statusFilter">
+            <option value="todos">Todos</option>
+            <option value="nao-iniciado">Nao iniciado</option>
+            <option value="em-andamento">Em andamento</option>
+            <option value="pendente">Pendente</option>
+            <option value="bloqueado">Bloqueado</option>
+            <option value="concluido">Concluido</option>
+          </select>
+        </div>
+        <div class="field interactive">
+          <label for="phaseFilter">Fase</label>
+          <select class="select" id="phaseFilter">
+            <option value="todas">Todas</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="phase-list" id="phaseList"></section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        <strong>Como usar:</strong> altere os status, escreva observacoes e use "Exportar HTML atualizado" para baixar
+        uma copia deste arquivo com o estado atual embutido. O navegador tambem salva automaticamente no armazenamento local.
+      </p>
+    </footer>
+  </div>
+
+  <script id="project-data" type="application/json">
+{
+  "project": {
+    "name": "QuorumHub",
+    "tagline": "Do quorum a ata, tudo em um so lugar.",
+    "owner": "POC Microsoft / Projeto pessoal",
+    "mode": "SaaS em VPS primeiro, Daily/OpenAI como diferencial premium",
+    "startedAt": "2026-06-07",
+    "lastReview": "2026-06-07",
+    "cadence": "Revisao semanal ou ao final de cada bloco de desenvolvimento"
+  },
+  "phases": [
+    {
+      "id": "fase-0",
+      "order": 0,
+      "title": "Fundacao do Produto e Direcao",
+      "summary": "Definir o que e o QuorumHub, qual problema resolve, publico-alvo, diferenciais e caminho de evolucao.",
+      "status": "em-andamento",
+      "target": "1 semana",
+      "buffer": "2 dias",
+      "window": "Curto prazo",
+      "dependencies": "Decisoes de produto e alinhamento de escopo.",
+      "observations": "Documento DIRECAO_SAAS.md criado; nome QuorumHub escolhido.",
+      "notes": [
+        {
+          "date": "2026-06-07",
+          "text": "Projeto reposicionado como SaaS para assembleias condominiais, com Daily/OpenAI como diferencial obrigatorio em fase premium."
+        }
+      ],
+      "deliverables": [
+        {
+          "id": "f0-d1",
+          "title": "Nome de mercado",
+          "description": "Escolher nome oficial do produto.",
+          "status": "concluido",
+          "owner": "Produto",
+          "dependsOn": "Brainstorm de marca",
+          "notes": "Nome escolhido: QuorumHub."
+        },
+        {
+          "id": "f0-d2",
+          "title": "Documento de direcao SaaS",
+          "description": "Registrar visao, estrategia, roadmap e principios do projeto.",
+          "status": "concluido",
+          "owner": "Produto/Tecnologia",
+          "dependsOn": "Definicao do posicionamento",
+          "notes": "Arquivo DIRECAO_SAAS.md criado."
+        },
+        {
+          "id": "f0-d3",
+          "title": "Manual de acompanhamento",
+          "description": "Criar project tracker editavel em HTML.",
+          "status": "em-andamento",
+          "owner": "Gestao do projeto",
+          "dependsOn": "Roadmap inicial",
+          "notes": "Este arquivo acompanha prazos, entregas, observacoes e status."
+        }
+      ]
+    },
+    {
+      "id": "fase-1",
+      "order": 1,
+      "title": "Base SaaS Multi-Condominio",
+      "summary": "Transformar o app de instancia unica em uma plataforma com contas, condominios, usuarios e isolamento de dados.",
+      "status": "nao-iniciado",
+      "target": "4 semanas",
+      "buffer": "2 semanas",
+      "window": "Proxima grande fase",
+      "dependencies": "PostgreSQL, modelo de usuarios, regras de permissao.",
+      "observations": "Esta fase deve vir antes de Daily/OpenAI para evitar retrabalho.",
+      "notes": [],
+      "deliverables": [
+        {
+          "id": "f1-d1",
+          "title": "Modelo de dados normalizado",
+          "description": "Criar tabelas para usuarios, condominios, assembleias, unidades, pautas, votos, procuracoes e auditoria.",
+          "status": "nao-iniciado",
+          "owner": "Backend",
+          "dependsOn": "Decisao de estrutura SaaS",
+          "notes": "Hoje existe suporte PostgreSQL inicial via JSONB; precisa normalizar."
+        },
+        {
+          "id": "f1-d2",
+          "title": "Autenticacao real",
+          "description": "Login por usuario, senha segura, sessao, recuperacao futura e papeis.",
+          "status": "nao-iniciado",
+          "owner": "Backend/Frontend",
+          "dependsOn": "Tabela de usuarios",
+          "notes": "Substituir senha admin global."
+        },
+        {
+          "id": "f1-d3",
+          "title": "Multi-tenant por condominio",
+          "description": "Garantir que todo dado pertenca a um condominio e que usuarios so acessem dados autorizados.",
+          "status": "nao-iniciado",
+          "owner": "Backend",
+          "dependsOn": "Autenticacao e modelo de condominios",
+          "notes": "Ponto critico de seguranca."
+        },
+        {
+          "id": "f1-d4",
+          "title": "Papeis e permissoes",
+          "description": "Definir dono da conta, sindico, operador/condutor e participante.",
+          "status": "nao-iniciado",
+          "owner": "Produto/Backend",
+          "dependsOn": "Autenticacao",
+          "notes": "Daily/OpenAI exigira papel de condutor."
+        }
+      ]
+    },
+    {
+      "id": "fase-2",
+      "order": 2,
+      "title": "Operacao em VPS",
+      "summary": "Preparar ambiente de producao inicial com custo controlado, backup e deploy previsivel.",
+      "status": "nao-iniciado",
+      "target": "3 semanas",
+      "buffer": "2 semanas",
+      "window": "Apos fundacao SaaS inicial",
+      "dependencies": "App minimamente multi-tenant e PostgreSQL estavel.",
+      "observations": "A VPS e a estrategia inicial preferida para custo previsivel.",
+      "notes": [],
+      "deliverables": [
+        {
+          "id": "f2-d1",
+          "title": "Docker Compose",
+          "description": "Criar composicao para app, PostgreSQL, volumes e rede.",
+          "status": "nao-iniciado",
+          "owner": "DevOps",
+          "dependsOn": "Dependencias consolidadas",
+          "notes": ""
+        },
+        {
+          "id": "f2-d2",
+          "title": "HTTPS e dominio",
+          "description": "Configurar Caddy ou Nginx com certificado automatico.",
+          "status": "nao-iniciado",
+          "owner": "DevOps",
+          "dependsOn": "VPS e dominio",
+          "notes": ""
+        },
+        {
+          "id": "f2-d3",
+          "title": "Backup automatico",
+          "description": "Criar rotina diaria de backup de banco e arquivos para local externo.",
+          "status": "nao-iniciado",
+          "owner": "DevOps",
+          "dependsOn": "PostgreSQL e pasta de anexos definidos",
+          "notes": "Obrigatorio antes de piloto real."
+        },
+        {
+          "id": "f2-d4",
+          "title": "Manual de operacao",
+          "description": "Documentar deploy, restart, logs, backup e restore.",
+          "status": "nao-iniciado",
+          "owner": "Documentacao",
+          "dependsOn": "Ambiente VPS definido",
+          "notes": "Documento essencial para reduzir inseguranca operacional."
+        }
+      ]
+    },
+    {
+      "id": "fase-3",
+      "order": 3,
+      "title": "Produto Comercial Inicial",
+      "summary": "Fechar o conjunto minimo vendavel antes de integrar videoconferencia e IA.",
+      "status": "nao-iniciado",
+      "target": "5 semanas",
+      "buffer": "2 semanas",
+      "window": "Antes do piloto pago",
+      "dependencies": "Base SaaS, VPS, backup e fluxo de assembleia estavel.",
+      "observations": "Mesmo sem Daily/OpenAI, esta fase deve estar pronta para testes internos e demonstracao.",
+      "notes": [],
+      "deliverables": [
+        {
+          "id": "f3-d1",
+          "title": "Painel do cliente",
+          "description": "Tela para gerenciar condominios, assembleias e historico.",
+          "status": "nao-iniciado",
+          "owner": "Frontend",
+          "dependsOn": "Multi-condominio",
+          "notes": ""
+        },
+        {
+          "id": "f3-d2",
+          "title": "Fluxo de assembleia completo",
+          "description": "Preparar, abrir, votar, fechar, apurar e exportar ata/relatorios.",
+          "status": "nao-iniciado",
+          "owner": "Produto/Fullstack",
+          "dependsOn": "Modelo de dados normalizado",
+          "notes": ""
+        },
+        {
+          "id": "f3-d3",
+          "title": "Auditoria",
+          "description": "Registrar eventos relevantes: login, cadastro, voto, abertura, fechamento, exportacao.",
+          "status": "nao-iniciado",
+          "owner": "Backend",
+          "dependsOn": "Modelo de auditoria",
+          "notes": "Importante para confianca juridica."
+        },
+        {
+          "id": "f3-d4",
+          "title": "Documentacao de uso atualizada",
+          "description": "Manual para sindico/operador e guia tecnico basico.",
+          "status": "nao-iniciado",
+          "owner": "Documentacao",
+          "dependsOn": "Fluxos finais da fase 3",
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": "fase-4",
+      "order": 4,
+      "title": "Daily/OpenAI - Diferencial Premium",
+      "summary": "Integrar reuniao online, gravacao, transcricao e geracao de ata por IA.",
+      "status": "nao-iniciado",
+      "target": "6 semanas",
+      "buffer": "3 semanas",
+      "window": "Depois da base comercial inicial",
+      "dependencies": "Conta Daily, chave OpenAI, storage de gravacoes, modelo de custos.",
+      "observations": "Recurso essencial para comercializacao final, mas deve entrar depois da fundacao SaaS.",
+      "notes": [],
+      "deliverables": [
+        {
+          "id": "f4-d1",
+          "title": "Sala Daily por assembleia",
+          "description": "Criar sala de video integrada ao app com papel de condutor.",
+          "status": "nao-iniciado",
+          "owner": "Integrações",
+          "dependsOn": "Multi-tenant e condutor",
+          "notes": ""
+        },
+        {
+          "id": "f4-d2",
+          "title": "Gravacao",
+          "description": "Iniciar/parar gravacao, recuperar arquivo e vincular a assembleia.",
+          "status": "nao-iniciado",
+          "owner": "Integrações",
+          "dependsOn": "Daily e storage",
+          "notes": "Validar custo por minuto antes de ativar comercialmente."
+        },
+        {
+          "id": "f4-d3",
+          "title": "Transcricao OpenAI",
+          "description": "Enviar audio/video para transcricao e armazenar resultado.",
+          "status": "nao-iniciado",
+          "owner": "IA/Backend",
+          "dependsOn": "Gravacao recuperavel",
+          "notes": ""
+        },
+        {
+          "id": "f4-d4",
+          "title": "Ata por IA",
+          "description": "Gerar minuta de ata com transcricao, pautas, votos, quorum e presencas.",
+          "status": "nao-iniciado",
+          "owner": "IA/Produto",
+          "dependsOn": "Transcricao e dados estruturados",
+          "notes": "Sempre com revisao humana antes de finalizacao."
+        }
+      ]
+    },
+    {
+      "id": "fase-5",
+      "order": 5,
+      "title": "Monetizacao e Piloto",
+      "summary": "Definir planos, controlar uso e iniciar validacao com clientes reais.",
+      "status": "nao-iniciado",
+      "target": "4 semanas",
+      "buffer": "2 semanas",
+      "window": "Apos recurso premium validado tecnicamente",
+      "dependencies": "Produto demonstravel, custos mapeados, ambiente estavel.",
+      "observations": "Comecar com poucos pilotos para aprender sem sobrecarregar suporte.",
+      "notes": [],
+      "deliverables": [
+        {
+          "id": "f5-d1",
+          "title": "Modelo de planos",
+          "description": "Definir precos, limites e o que entra em cada plano.",
+          "status": "nao-iniciado",
+          "owner": "Negocio",
+          "dependsOn": "Custos Daily/OpenAI estimados",
+          "notes": ""
+        },
+        {
+          "id": "f5-d2",
+          "title": "Controle de uso",
+          "description": "Medir assembleias, minutos gravados, transcricoes e uso de IA.",
+          "status": "nao-iniciado",
+          "owner": "Backend",
+          "dependsOn": "Integrações premium",
+          "notes": "Evita vender com margem negativa."
+        },
+        {
+          "id": "f5-d3",
+          "title": "Piloto controlado",
+          "description": "Selecionar 1 a 3 condominios para validar fluxo real.",
+          "status": "nao-iniciado",
+          "owner": "Comercial/Produto",
+          "dependsOn": "Ambiente estavel e manual operacional",
+          "notes": ""
+        },
+        {
+          "id": "f5-d4",
+          "title": "Ajustes pos-piloto",
+          "description": "Registrar feedback, corrigir gargalos e preparar oferta comercial.",
+          "status": "nao-iniciado",
+          "owner": "Produto",
+          "dependsOn": "Piloto executado",
+          "notes": ""
+        }
+      ]
+    }
+  ]
+}
+  </script>
+
+  <script>
+    const STORAGE_KEY = "quorumhub.project.tracker.v1";
+    const STATUS = {
+      "nao-iniciado": "Nao iniciado",
+      "em-andamento": "Em andamento",
+      "pendente": "Pendente",
+      "bloqueado": "Bloqueado",
+      "concluido": "Concluido"
+    };
+
+    let state = loadInitialState();
+
+    function loadInitialState() {
+      const embedded = JSON.parse(document.getElementById("project-data").textContent);
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) return embedded;
+      try {
+        const parsed = JSON.parse(saved);
+        return parsed && parsed.phases ? parsed : embedded;
+      } catch {
+        return embedded;
+      }
+    }
+
+    function persist() {
+      state.project.lastReview = new Date().toISOString().slice(0, 10);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function esc(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function slugStatus(status) {
+      return `status-${status || "nao-iniciado"}`;
+    }
+
+    function allDeliverables() {
+      return state.phases.flatMap(phase => phase.deliverables.map(item => ({ phase, item })));
+    }
+
+    function phaseProgress(phase) {
+      if (!phase.deliverables.length) return 0;
+      const done = phase.deliverables.filter(item => item.status === "concluido").length;
+      return Math.round((done / phase.deliverables.length) * 100);
+    }
+
+    function projectProgress() {
+      const items = allDeliverables();
+      if (!items.length) return 0;
+      const done = items.filter(({ item }) => item.status === "concluido").length;
+      return Math.round((done / items.length) * 100);
+    }
+
+    function statusOptions(selected) {
+      return Object.entries(STATUS).map(([key, label]) =>
+        `<option value="${key}" ${selected === key ? "selected" : ""}>${label}</option>`
+      ).join("");
+    }
+
+    function renderMeta() {
+      const meta = [
+        ["Produto", state.project.name],
+        ["Posicionamento", state.project.tagline],
+        ["Estrategia", state.project.mode],
+        ["Ultima revisao", state.project.lastReview || "-"]
+      ];
+      document.getElementById("projectMeta").innerHTML = meta.map(([label, value]) => `
+        <div class="meta">
+          <span>${esc(label)}</span>
+          <strong>${esc(value)}</strong>
+        </div>
+      `).join("");
+    }
+
+    function renderStats() {
+      const items = allDeliverables();
+      const done = items.filter(({ item }) => item.status === "concluido").length;
+      const active = items.filter(({ item }) => item.status === "em-andamento").length;
+      const blocked = items.filter(({ item }) => item.status === "bloqueado").length;
+      document.getElementById("stats").innerHTML = `
+        <div class="stat"><strong>${done}</strong><span>Concluidas</span></div>
+        <div class="stat"><strong>${active}</strong><span>Em curso</span></div>
+        <div class="stat"><strong>${blocked}</strong><span>Bloqueios</span></div>
+      `;
+
+      const progress = projectProgress();
+      document.getElementById("progressText").textContent = `${progress}%`;
+      document.getElementById("progressRing").style.setProperty("--progress", `${progress * 3.6}deg`);
+    }
+
+    function renderFilters() {
+      const phaseFilter = document.getElementById("phaseFilter");
+      const current = phaseFilter.value || "todas";
+      phaseFilter.innerHTML = `<option value="todas">Todas</option>` + state.phases.map(phase =>
+        `<option value="${phase.id}">${esc(phase.order)} - ${esc(phase.title)}</option>`
+      ).join("");
+      phaseFilter.value = current;
+    }
+
+    function matchesFilters(phase) {
+      const search = document.getElementById("search").value.trim().toLowerCase();
+      const status = document.getElementById("statusFilter").value;
+      const phaseFilter = document.getElementById("phaseFilter").value;
+      if (phaseFilter !== "todas" && phase.id !== phaseFilter) return false;
+
+      const hasStatus = status === "todos" ||
+        phase.status === status ||
+        phase.deliverables.some(item => item.status === status);
+      if (!hasStatus) return false;
+
+      if (!search) return true;
+      const haystack = [
+        phase.title,
+        phase.summary,
+        phase.dependencies,
+        phase.observations,
+        phase.window,
+        ...phase.deliverables.flatMap(item => [item.title, item.description, item.dependsOn, item.notes, item.owner]),
+        ...phase.notes.map(note => `${note.date} ${note.text}`)
+      ].join(" ").toLowerCase();
+      return haystack.includes(search);
+    }
+
+    function renderPhases() {
+      const phases = state.phases.filter(matchesFilters).sort((a, b) => a.order - b.order);
+      const root = document.getElementById("phaseList");
+      if (!phases.length) {
+        root.innerHTML = `<div class="empty">Nenhuma fase encontrada para o filtro atual.</div>`;
+        return;
+      }
+
+      root.innerHTML = phases.map(phase => `
+        <article class="panel phase" data-phase="${esc(phase.id)}">
+          <div class="phase-header">
+            <div class="phase-title">
+              <div class="phase-number">${esc(phase.order)}</div>
+              <div>
+                <h3>${esc(phase.title)}</h3>
+                <p class="phase-summary">${esc(phase.summary)}</p>
+              </div>
+            </div>
+            <div class="phase-meta">
+              <span class="pill ${slugStatus(phase.status)}">${STATUS[phase.status]}</span>
+              <span class="pill status-pendente">Prazo: ${esc(phase.target)}</span>
+              <span class="pill status-nao-iniciado">Gordura: ${esc(phase.buffer)}</span>
+              <span class="pill status-concluido">${phaseProgress(phase)}%</span>
+            </div>
+          </div>
+
+          <div class="phase-body">
+            <div class="phase-grid">
+              <div class="mini-card">
+                <span>Status da fase</span>
+                <select class="select" data-action="phase-status" data-phase="${esc(phase.id)}">${statusOptions(phase.status)}</select>
+              </div>
+              <div class="mini-card">
+                <span>Janela</span>
+                <strong>${esc(phase.window)}</strong>
+              </div>
+              <div class="mini-card">
+                <span>Dependencias</span>
+                <p>${esc(phase.dependencies)}</p>
+              </div>
+              <div class="mini-card">
+                <span>Observacoes</span>
+                <p>${esc(phase.observations)}</p>
+              </div>
+            </div>
+
+            <div class="deliverables">
+              ${phase.deliverables.map(item => `
+                <div class="deliverable" data-deliverable="${esc(item.id)}">
+                  <div class="deliverable-title">
+                    <strong>${esc(item.title)}</strong>
+                    <span>${esc(item.description)}</span>
+                  </div>
+                  <div class="field">
+                    <label>Status</label>
+                    <select class="select" data-action="deliverable-status" data-phase="${esc(phase.id)}" data-deliverable="${esc(item.id)}">
+                      ${statusOptions(item.status)}
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label>Observacao da entrega</label>
+                    <textarea class="textarea" data-action="deliverable-notes" data-phase="${esc(phase.id)}" data-deliverable="${esc(item.id)}">${esc(item.notes)}</textarea>
+                  </div>
+                </div>
+              `).join("")}
+            </div>
+
+            <div class="notes">
+              <div class="field">
+                <label>Nova observacao da fase</label>
+                <textarea class="textarea" data-action="new-note" data-phase="${esc(phase.id)}" placeholder="Registre uma decisao, risco, aprendizado ou proximo passo..."></textarea>
+              </div>
+              <button class="btn ghost" data-action="add-note" data-phase="${esc(phase.id)}">Adicionar observacao</button>
+            </div>
+
+            <div class="note-log">
+              ${phase.notes.length ? phase.notes.map(note => `
+                <div class="note">
+                  <time>${esc(note.date)}</time>
+                  ${esc(note.text)}
+                </div>
+              `).join("") : `<div class="empty">Sem observacoes registradas nesta fase.</div>`}
+            </div>
+          </div>
+        </article>
+      `).join("");
+    }
+
+    function findPhase(id) {
+      return state.phases.find(phase => phase.id === id);
+    }
+
+    function findDeliverable(phaseId, itemId) {
+      const phase = findPhase(phaseId);
+      if (!phase) return null;
+      return phase.deliverables.find(item => item.id === itemId);
+    }
+
+    function updatePhaseStatus(phaseId, status) {
+      const phase = findPhase(phaseId);
+      if (!phase) return;
+      phase.status = status;
+      persist();
+      render();
+    }
+
+    function updateDeliverableStatus(phaseId, itemId, status) {
+      const item = findDeliverable(phaseId, itemId);
+      if (!item) return;
+      item.status = status;
+
+      const phase = findPhase(phaseId);
+      const statuses = phase.deliverables.map(deliverable => deliverable.status);
+      if (statuses.every(value => value === "concluido")) phase.status = "concluido";
+      else if (statuses.includes("bloqueado")) phase.status = "bloqueado";
+      else if (statuses.includes("em-andamento")) phase.status = "em-andamento";
+      else if (statuses.includes("pendente")) phase.status = "pendente";
+      else phase.status = "nao-iniciado";
+
+      persist();
+      render();
+    }
+
+    function updateDeliverableNotes(phaseId, itemId, notes) {
+      const item = findDeliverable(phaseId, itemId);
+      if (!item) return;
+      item.notes = notes;
+      persist();
+    }
+
+    function addNote(phaseId) {
+      const textarea = document.querySelector(`[data-action="new-note"][data-phase="${phaseId}"]`);
+      const text = textarea ? textarea.value.trim() : "";
+      if (!text) return;
+      const phase = findPhase(phaseId);
+      if (!phase) return;
+      phase.notes.unshift({
+        date: new Date().toISOString().slice(0, 10),
+        text
+      });
+      persist();
+      render();
+    }
+
+    function exportHtmlSnapshot() {
+      persist();
+      const snapshot = JSON.stringify(state, null, 2)
+        .replace(/</g, "\\u003c");
+      const clone = document.documentElement.cloneNode(true);
+      const dataTag = clone.querySelector("#project-data");
+      dataTag.textContent = `\n${snapshot}\n  `;
+      const html = `<!doctype html>\n${clone.outerHTML}`;
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "PROJECT_QUORUMHUB.html";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function resetToEmbedded() {
+      const ok = confirm("Restaurar os dados originais embutidos no arquivo? Isso apaga as alteracoes salvas no navegador.");
+      if (!ok) return;
+      localStorage.removeItem(STORAGE_KEY);
+      state = JSON.parse(document.getElementById("project-data").textContent);
+      render();
+    }
+
+    function render() {
+      renderMeta();
+      renderStats();
+      renderFilters();
+      renderPhases();
+    }
+
+    document.addEventListener("input", event => {
+      const target = event.target;
+      const action = target.dataset.action;
+      if (target.id === "search") renderPhases();
+      if (action === "deliverable-notes") {
+        updateDeliverableNotes(target.dataset.phase, target.dataset.deliverable, target.value);
+      }
+    });
+
+    document.addEventListener("change", event => {
+      const target = event.target;
+      const action = target.dataset.action;
+      if (target.id === "statusFilter" || target.id === "phaseFilter") renderPhases();
+      if (action === "phase-status") updatePhaseStatus(target.dataset.phase, target.value);
+      if (action === "deliverable-status") updateDeliverableStatus(target.dataset.phase, target.dataset.deliverable, target.value);
+    });
+
+    document.addEventListener("click", event => {
+      const target = event.target.closest("button");
+      if (!target) return;
+      const action = target.dataset.action;
+      if (action === "add-note") addNote(target.dataset.phase);
+    });
+
+    document.getElementById("btnExport").addEventListener("click", exportHtmlSnapshot);
+    document.getElementById("btnReset").addEventListener("click", resetToEmbedded);
+    document.getElementById("btnPrint").addEventListener("click", () => window.print());
+
+    render();
+  </script>
+</body>
+</html>
