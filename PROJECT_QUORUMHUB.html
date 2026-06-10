@@ -619,8 +619,9 @@
     "tagline": "Do quorum a ata, tudo em um so lugar.",
     "owner": "POC Microsoft / Projeto pessoal",
     "mode": "SaaS em VPS primeiro, Daily/OpenAI como diferencial premium",
+    "workspacePath": "D:\\PROJETOS_PESSOAIS\\PROJETO_QUORUM_HUB",
     "startedAt": "2026-06-07",
-    "lastReview": "2026-06-07",
+    "lastReview": "2026-06-09",
     "cadence": "Revisao semanal ou ao final de cada bloco de desenvolvimento"
   },
   "phases": [
@@ -639,6 +640,10 @@
         {
           "date": "2026-06-07",
           "text": "Projeto reposicionado como SaaS para assembleias condominiais, com Daily/OpenAI como diferencial obrigatorio em fase premium."
+        },
+        {
+          "date": "2026-06-09",
+          "text": "Pasta local reorganizada para D:\\PROJETOS_PESSOAIS\\PROJETO_QUORUM_HUB."
         }
       ],
       "deliverables": [
@@ -999,6 +1004,7 @@
         ["Produto", state.project.name],
         ["Posicionamento", state.project.tagline],
         ["Estrategia", state.project.mode],
+        ["Pasta local", state.project.workspacePath || "-"],
         ["Ultima revisao", state.project.lastReview || "-"]
       ];
       document.getElementById("projectMeta").innerHTML = meta.map(([label, value]) => `

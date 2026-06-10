@@ -9,7 +9,7 @@
 
 ## Instalação (apenas na primeira vez)
 
-1. **Delete a pasta `node_modules`** (se ela existir na pasta `PROJETO QUORUM_HUB`) — selecione e pressione Delete no Windows Explorer
+1. **Delete a pasta `node_modules`** (se ela existir na pasta `PROJETO_QUORUM_HUB`) — selecione e pressione Delete no Windows Explorer
 2. Abra o **Prompt de Comando** nesta pasta  
    _(dica: na barra de endereço do Explorer, digite `cmd` e pressione Enter)_
 3. Execute:
