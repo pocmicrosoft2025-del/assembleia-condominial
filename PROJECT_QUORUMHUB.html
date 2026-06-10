@@ -182,7 +182,7 @@
 
     .meta-grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
       gap: 10px;
       margin-top: 18px;
     }
@@ -192,7 +192,12 @@
       background: #fbfaf4;
       padding: 12px;
       border-radius: 8px;
-      min-height: 82px;
+      min-height: 76px;
+      min-width: 0;
+    }
+
+    .meta.meta-wide {
+      grid-column: span 2;
     }
 
     .meta span {
@@ -209,6 +214,8 @@
       color: var(--olive-900);
       font-size: .98rem;
       line-height: 1.25;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .score {
@@ -326,7 +333,7 @@
 
     .phase-list {
       display: grid;
-      gap: 14px;
+      gap: 12px;
     }
 
     .phase {
@@ -385,9 +392,9 @@
     .phase-header {
       display: grid;
       grid-template-columns: 1fr auto;
-      gap: 16px;
+      gap: 12px;
       align-items: start;
-      padding: 18px;
+      padding: 14px 16px;
       background:
         linear-gradient(90deg, color-mix(in srgb, var(--phase-accent) 15%, transparent), transparent 58%),
         linear-gradient(180deg, var(--surface), var(--phase-tint));
@@ -423,8 +430,8 @@
     .phase-summary {
       margin: 5px 0 0;
       color: var(--muted);
-      line-height: 1.4;
-      font-size: .92rem;
+      line-height: 1.35;
+      font-size: .88rem;
     }
 
     .phase-meta {
@@ -453,26 +460,27 @@
     .pill.status-concluido { background: #d9ecd1; color: #2f6c2a; border-color: #9fca96; }
 
     .phase-body {
-      padding: 16px 18px 18px;
+      padding: 12px 16px 14px;
       display: grid;
-      gap: 14px;
+      gap: 10px;
       background:
         linear-gradient(180deg, color-mix(in srgb, var(--phase-body) 88%, #fff), var(--phase-body));
     }
 
-    .phase-grid {
+    .phase-grid,
+    .phase-brief {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 10px;
+      grid-template-columns: 180px .7fr 1fr 1fr;
+      gap: 8px;
     }
 
     .mini-card {
       border: 1px solid var(--line);
       border-radius: 8px;
-      padding: 11px;
+      padding: 8px 10px;
       background: rgba(255,255,255,.68);
-      min-height: 76px;
       box-shadow: inset 0 3px 0 color-mix(in srgb, var(--phase-accent) 30%, transparent);
+      min-width: 0;
     }
 
     .mini-card span {
@@ -481,27 +489,28 @@
       color: var(--muted);
       font-weight: 900;
       text-transform: uppercase;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
 
     .mini-card strong, .mini-card p {
       margin: 0;
       color: var(--olive-900);
-      font-size: .9rem;
-      line-height: 1.35;
+      font-size: .84rem;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
     }
 
     .deliverables {
       display: grid;
-      gap: 8px;
+      gap: 6px;
     }
 
     .deliverable {
       display: grid;
-      grid-template-columns: minmax(220px, 1fr) 165px minmax(240px, .9fr);
-      gap: 10px;
+      grid-template-columns: minmax(260px, 1fr) 165px minmax(180px, .55fr);
+      gap: 8px;
       align-items: start;
-      padding: 10px;
+      padding: 8px 10px;
       border: 1px solid color-mix(in srgb, var(--phase-accent) 18%, var(--line));
       border-radius: 8px;
       background: rgba(255,255,255,.78);
@@ -511,15 +520,35 @@
     .deliverable-title strong {
       display: block;
       color: var(--graphite);
-      font-size: .94rem;
+      font-size: .9rem;
     }
 
     .deliverable-title span {
       display: block;
       color: var(--muted);
-      font-size: .82rem;
+      font-size: .78rem;
       margin-top: 2px;
-      line-height: 1.35;
+      line-height: 1.3;
+    }
+
+    .note-editor {
+      border: 1px solid color-mix(in srgb, var(--phase-accent) 22%, var(--line));
+      border-radius: 8px;
+      background: rgba(255,255,255,.55);
+      padding: 8px 10px;
+    }
+
+    .note-editor summary {
+      color: var(--olive-900);
+      font-size: .78rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      list-style-position: inside;
+    }
+
+    .note-editor .textarea {
+      margin-top: 8px;
+      min-height: 68px;
     }
 
     .notes {
@@ -576,14 +605,15 @@
     @media (max-width: 1100px) {
       .hero { grid-template-columns: 1fr; }
       .deliverable { grid-template-columns: 1fr; }
-      .phase-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .phase-grid, .phase-brief { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
 
     @media (max-width: 760px) {
       .topbar-inner { grid-template-columns: 1fr; }
       .toolbar { justify-content: flex-start; }
       .main { padding: 16px; }
-      .meta-grid, .phase-grid, .controls, .notes { grid-template-columns: 1fr; }
+      .meta-grid, .phase-grid, .phase-brief, .controls, .notes { grid-template-columns: 1fr; }
+      .meta.meta-wide { grid-column: auto; }
       .phase-header { grid-template-columns: 1fr; }
       .phase-meta { justify-content: flex-start; }
     }
@@ -711,6 +741,10 @@
         {
           "date": "2026-06-10",
           "text": "Paleta visual do Project Tracker revisada para diferenciar melhor fases, entregas, status e observacoes."
+        },
+        {
+          "date": "2026-06-10",
+          "text": "Layout do Project Tracker compactado: metadados com quebra de linha correta, fases com menor altura e observacoes de entrega recolhiveis."
         }
       ],
       "deliverables": [
@@ -1080,7 +1114,7 @@
         ["Ultima revisao", state.project.lastReview || "-"]
       ];
       document.getElementById("projectMeta").innerHTML = meta.map(([label, value]) => `
-        <div class="meta">
+        <div class="meta ${label === "Pasta local" ? "meta-wide" : ""}">
           <span>${esc(label)}</span>
           <strong>${esc(value)}</strong>
         </div>
@@ -1163,7 +1197,7 @@
           </div>
 
           <div class="phase-body">
-            <div class="phase-grid">
+            <div class="phase-brief">
               <div class="mini-card">
                 <span>Status da fase</span>
                 <select class="select" data-action="phase-status" data-phase="${esc(phase.id)}">${statusOptions(phase.status)}</select>
@@ -1195,10 +1229,10 @@
                       ${statusOptions(item.status)}
                     </select>
                   </div>
-                  <div class="field">
-                    <label>Observacao da entrega</label>
+                  <details class="note-editor">
+                    <summary>Observacao</summary>
                     <textarea class="textarea" data-action="deliverable-notes" data-phase="${esc(phase.id)}" data-deliverable="${esc(item.id)}">${esc(item.notes)}</textarea>
-                  </div>
+                  </details>
                 </div>
               `).join("")}
             </div>
