@@ -621,7 +621,7 @@
     "mode": "SaaS em VPS primeiro, Daily/OpenAI como diferencial premium",
     "workspacePath": "D:\\PROJETOS_PESSOAIS\\PROJETO_QUORUM_HUB",
     "startedAt": "2026-06-07",
-    "lastReview": "2026-06-09",
+    "lastReview": "2026-06-10",
     "cadence": "Revisao semanal ou ao final de cada bloco de desenvolvimento"
   },
   "phases": [
@@ -681,13 +681,18 @@
       "order": 1,
       "title": "Base SaaS Multi-Condominio",
       "summary": "Transformar o app de instancia unica em uma plataforma com contas, condominios, usuarios e isolamento de dados.",
-      "status": "nao-iniciado",
+      "status": "em-andamento",
       "target": "4 semanas",
       "buffer": "2 semanas",
       "window": "Proxima grande fase",
       "dependencies": "PostgreSQL, modelo de usuarios, regras de permissao.",
       "observations": "Esta fase deve vir antes de Daily/OpenAI para evitar retrabalho.",
-      "notes": [],
+      "notes": [
+        {
+          "date": "2026-06-10",
+          "text": "Iniciada base SaaS: cadastro/metadados de condominio ativo, tela administrativa de condominio e vinculo inicial de assembleia, unidades e pautas ao condominio atual."
+        }
+      ],
       "deliverables": [
         {
           "id": "f1-d1",
@@ -711,10 +716,10 @@
           "id": "f1-d3",
           "title": "Multi-tenant por condominio",
           "description": "Garantir que todo dado pertenca a um condominio e que usuarios so acessem dados autorizados.",
-          "status": "nao-iniciado",
+          "status": "em-andamento",
           "owner": "Backend",
           "dependsOn": "Autenticacao e modelo de condominios",
-          "notes": "Ponto critico de seguranca."
+          "notes": "Base inicial criada com condominio ativo e vinculo dos dados atuais. Ainda falta isolamento real por conta/usuario e PostgreSQL normalizado."
         },
         {
           "id": "f1-d4",

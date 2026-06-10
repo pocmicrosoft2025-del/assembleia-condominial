@@ -302,6 +302,7 @@ Adicionar recursos premium:
 
 ### Fase 1 - Fundacao SaaS
 
+- Iniciado em 10/06/2026: o app agora possui metadados de condominio ativo, tela administrativa de condominio e vinculo inicial de assembleia, unidades e pautas ao condominio atual.
 - Criar modelo multi-condominio.
 - Criar login real por usuario.
 - Criar papeis: dono da conta, sindico, operador/condutor, participante.

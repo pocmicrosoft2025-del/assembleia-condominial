@@ -576,6 +576,7 @@
   <div class="topbar">
     <div>
       <div class="topbar-brand"><i class="bi bi-building me-2"></i>Configuração da Assembleia</div>
+      <div class="topbar-sub" id="setup-condominium-name">Condomínio Principal</div>
       <div class="topbar-sub" id="setup-assembly-name">Nenhuma assembleia configurada</div>
     </div>
     <button class="btn btn-sm btn-outline-light" onclick="logout()"><i class="bi bi-box-arrow-left me-1"></i>Sair</button>
@@ -584,7 +585,10 @@
   <div class="container-fluid p-3">
     <!-- Tab Navigation -->
     <div class="d-flex gap-2 mb-0 flex-wrap" style="border-bottom:1px solid var(--border)">
-      <button class="setup-tab active" onclick="switchTab(this,'tab-assembly')" id="tab-btn-assembly">
+      <button class="setup-tab active" onclick="switchTab(this,'tab-condominium')" id="tab-btn-condominium">
+        <i class="bi bi-buildings me-1"></i>Condomínio
+      </button>
+      <button class="setup-tab" onclick="switchTab(this,'tab-assembly')" id="tab-btn-assembly">
         <i class="bi bi-info-circle me-1"></i>Assembleia
       </button>
       <button class="setup-tab" onclick="switchTab(this,'tab-units')" id="tab-btn-units">
@@ -598,8 +602,59 @@
       </button>
     </div>
 
+    <!-- TAB: CONDOMINIO -->
+    <div class="tab-content-panel active card p-4 border-top-0" id="tab-condominium" style="border-radius:0 12px 12px 12px">
+      <h5 class="fw-bold mb-3" style="color:var(--primary)"><i class="bi bi-buildings me-2"></i>Dados do Condomínio</h5>
+      <div class="row g-3">
+        <div class="col-md-8">
+          <label class="form-label fw-semibold">Nome do Condomínio *</label>
+          <input type="text" id="condo-name" class="form-control" placeholder="Ex: Edifício Solar das Acácias"/>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">CNPJ ou Identificação</label>
+          <input type="text" id="condo-document" class="form-control" placeholder="Opcional"/>
+        </div>
+        <div class="col-md-8">
+          <label class="form-label fw-semibold">Endereço</label>
+          <input type="text" id="condo-address" class="form-control" placeholder="Rua, número e complemento"/>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">Cidade</label>
+          <input type="text" id="condo-city" class="form-control" placeholder="Cidade"/>
+        </div>
+        <div class="col-md-1">
+          <label class="form-label fw-semibold">UF</label>
+          <input type="text" id="condo-state" class="form-control" maxlength="2" placeholder="SP"/>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Plano</label>
+          <select id="condo-plan" class="form-select">
+            <option value="starter">Starter</option>
+            <option value="professional">Professional</option>
+            <option value="premium">Premium</option>
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Status</label>
+          <select id="condo-status" class="form-select">
+            <option value="active">Ativo</option>
+            <option value="trial">Teste</option>
+            <option value="paused">Pausado</option>
+          </select>
+        </div>
+      </div>
+      <div class="mt-3 d-flex gap-2 flex-wrap">
+        <button class="btn btn-primary-custom" onclick="saveCondominium()">
+          <i class="bi bi-floppy me-1"></i>Salvar Condomínio
+        </button>
+        <button class="btn btn-outline-secondary" onclick="switchTab(document.getElementById('tab-btn-assembly'),'tab-assembly')">
+          <i class="bi bi-arrow-right me-1"></i>Ir para Assembleia
+        </button>
+      </div>
+    </div>
+
     <!-- TAB: ASSEMBLEIA -->
-    <div class="tab-content-panel active card p-4 border-top-0" id="tab-assembly" style="border-radius:0 12px 12px 12px">
+    <div class="tab-content-panel card p-4 border-top-0" id="tab-assembly" style="border-radius:0 12px 12px 12px">
       <h5 class="fw-bold mb-3" style="color:var(--primary)"><i class="bi bi-building me-2"></i>Dados da Assembleia</h5>
       <div class="row g-3">
         <div class="col-md-8">
@@ -792,8 +847,10 @@
 <div id="view-admin-dashboard" class="view">
   <div class="topbar">
     <div>
+      <div class="topbar-sub" id="dash-condominium-name">Condomínio Principal</div>
       <div class="topbar-brand" id="dash-assembly-name">Assembleia</div>
       <div class="topbar-sub" id="dash-assembly-info"></div>
+      <div class="topbar-sub" id="dash-condominium-info"></div>
     </div>
     <div class="d-flex gap-2 flex-wrap">
       <button class="btn btn-sm btn-outline-light" onclick="showView('view-admin-setup')"><i class="bi bi-gear me-1"></i>Configurações</button>
@@ -971,6 +1028,9 @@
 const S = {
   role: null,
   adminToken: null,
+  condominium: null,
+  condominiums: [],
+  activeCondominiumId: null,
   assembly: null,
   units: [],
   pautas: [],
@@ -1004,6 +1064,9 @@ socket.on('connect', () => {
 });
 
 socket.on('state_sync', (data) => {
+  if (data.condominium) S.condominium = data.condominium;
+  if (data.condominiums) S.condominiums = data.condominiums;
+  if (data.activeCondominiumId) S.activeCondominiumId = data.activeCondominiumId;
   if (data.assembly) S.assembly = data.assembly;
   if (data.units) S.units = data.units;
   if (data.pautas) S.pautas = data.pautas;
@@ -1086,6 +1149,7 @@ function switchTab(btn, tabId) {
   if (tabId === 'tab-units') renderUnitsTable();
   if (tabId === 'tab-pautas') renderPautasSetup();
   if (tabId === 'tab-assembly') fillAssemblyForm();
+  if (tabId === 'tab-condominium') fillCondominiumForm();
 }
 
 function logout() {
@@ -1101,6 +1165,13 @@ function refreshUI() {
   // Update topbar labels
   const name = S.assembly ? S.assembly.name : 'Assembleia';
   const info = S.assembly ? `${formatDate(S.assembly.date)} · ${S.assembly.location || ''} · Status: ${S.assembly.status}` : '';
+  const condominiumName = S.condominium ? S.condominium.name : 'Condomínio Principal';
+  const condominiumInfo = S.condominium
+    ? [S.condominium.city, S.condominium.state].filter(Boolean).join(' / ')
+    : '';
+  setText('setup-condominium-name', condominiumName);
+  setText('dash-condominium-name', condominiumName);
+  setText('dash-condominium-info', condominiumInfo);
   setText('setup-assembly-name', name);
   setText('dash-assembly-name', name);
   setText('dash-assembly-info', info);
@@ -1111,6 +1182,7 @@ function refreshUI() {
   setText('dash-access-code', code || '---');
 
   if (S.role === 'admin') {
+    fillCondominiumForm();
     fillAssemblyForm();
     renderUnitsTable();
     renderPautasSetup();
@@ -1120,6 +1192,17 @@ function refreshUI() {
     renderLaunchChecklist();
     updateQRCode();
   }
+}
+
+function fillCondominiumForm() {
+  if (!S.condominium) return;
+  setVal('condo-name', S.condominium.name || '');
+  setVal('condo-document', S.condominium.document || '');
+  setVal('condo-address', S.condominium.address || '');
+  setVal('condo-city', S.condominium.city || '');
+  setVal('condo-state', S.condominium.state || '');
+  setVal('condo-plan', S.condominium.plan || 'starter');
+  setVal('condo-status', S.condominium.status || 'active');
 }
 
 function fillAssemblyForm() {
@@ -1171,11 +1254,17 @@ async function loadDemoAndEnter() {
 
 async function loadAdminData() {
   try {
-    const [units, pautas, assembly] = await Promise.all([
+    const [condominiums, units, pautas, assembly] = await Promise.all([
+      apiFetch('/api/condominiums'),
       apiFetch('/api/units'),
       apiFetch('/api/pautas'),
       apiFetch('/api/assembly').catch(() => null),
     ]);
+    if (condominiums) {
+      S.condominiums = condominiums.condominiums || [];
+      S.activeCondominiumId = condominiums.activeCondominiumId || null;
+      S.condominium = condominiums.activeCondominium || S.condominiums.find(c => c.id === S.activeCondominiumId) || null;
+    }
     if (units) S.units = Array.isArray(units) ? units : (units.units || []);
     if (pautas) S.pautas = Array.isArray(pautas) ? pautas : (pautas.pautas || []);
     if (assembly) S.assembly = assembly.assembly || assembly;
@@ -1192,6 +1281,31 @@ async function loadAdminData() {
 
     refreshUI();
   } catch(e) { console.error('loadAdminData:', e); }
+}
+
+/* ══════════════════════════════════════════
+   CONDOMINIUM
+══════════════════════════════════════════ */
+async function saveCondominium() {
+  const body = {
+    name: getVal('condo-name'),
+    document: getVal('condo-document'),
+    address: getVal('condo-address'),
+    city: getVal('condo-city'),
+    state: getVal('condo-state').toUpperCase(),
+    plan: getVal('condo-plan'),
+    status: getVal('condo-status'),
+  };
+  if (!body.name) { toast('Informe o nome do condomínio', 'warning'); return; }
+  try {
+    const data = await apiFetch('/api/condominiums/current', 'PUT', body);
+    S.condominium = data.activeCondominium || data;
+    const idx = S.condominiums.findIndex(c => c.id === S.condominium.id);
+    if (idx >= 0) S.condominiums[idx] = S.condominium;
+    else S.condominiums.push(S.condominium);
+    toast('Condomínio salvo!', 'success');
+    refreshUI();
+  } catch(e) { toast(e.message, 'danger'); }
 }
 
 /* ══════════════════════════════════════════

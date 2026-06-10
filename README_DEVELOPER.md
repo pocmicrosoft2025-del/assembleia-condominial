@@ -102,8 +102,16 @@ O estado completo fica em um único objeto `state` no `server.js`. É persistido
 
 ```js
 state = {
+  condominiums: [
+    {
+      id, name, document, address, city, state,
+      plan, status, createdAt, updatedAt
+    }
+  ],
+  activeCondominiumId,
+
   assembly: {
-    id, name, date, description, location,
+    id, condominiumId, name, date, description, location,
     accessCode,          // código de 6 chars que participantes usam para entrar
     status,              // 'setup' | 'open' | 'closed'
     quorumInstall,       // % mínimo de presença para instalar a assembleia (padrão 25)
@@ -112,7 +120,7 @@ state = {
 
   units: [
     {
-      id, number, ownerName, ownerCpf,
+      id, condominiumId, number, ownerName, ownerCpf,
       authorizedVoter: {
         name, cpf,
         isOwner,     // true se o próprio dono vai votar
@@ -123,7 +131,7 @@ state = {
 
   pautas: [
     {
-      id, order, title, description,
+      id, condominiumId, order, title, description,
       quorum,         // 'simples' | 'dois_tercos' | 'unanimidade'
       timerMinutes,   // 0 = sem timer
       status,         // 'pending' | 'open' | 'closed'
@@ -156,7 +164,7 @@ state = {
   // Não persistidos (runtime only):
   adminSockets: Set,
   pautaTimers: {},      // clearTimeout references
-  adminSessions: Map,   // token → { createdAt }
+  adminSessions: Map,   // token → { expiresAt, condominiumId }
   adminLoginAttempts: Map
 }
 ```
@@ -169,6 +177,13 @@ state = {
 | Método | Rota | Descrição |
 |--------|------|-----------|
 | `POST` | `/api/admin/login` | Login. Body: `{ password }`. Retorna `{ token }`. Rate-limited (5 tentativas, lock 15 min). |
+
+### Condomínios
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| `GET` | `/api/condominiums` | Lista condomínios conhecidos e retorna o condomínio ativo. Requer token admin. |
+| `POST` | `/api/condominiums` | Cria metadados de um novo condomínio. Requer token admin. |
+| `PUT` | `/api/condominiums/current` | Atualiza o condomínio ativo e vincula assembleia, unidades e pautas atuais a ele. Requer token admin. |
 
 ### Assembleia
 | Método | Rota | Descrição |
@@ -316,6 +331,7 @@ const S = {
 - [x] Exportação de resultados em Excel (3 abas: Resumo, Votos, Procurações)
 - [x] Persistência em JSON local (`data.json`)
 - [x] Persistência em PostgreSQL (para produção no Railway)
+- [x] Base SaaS inicial com cadastro/metadados de condomínio ativo
 - [x] Dados demo (seed) para testes
 - [x] Deploy no Railway com auto-deploy via GitHub
 
@@ -368,7 +384,7 @@ Esta é a maior feature pendente. O plano está definido, falta codificar.
 
 ### Outras features mapeadas no DIRECAO_SAAS.md
 
-- [ ] Multi-tenant SaaS (vários condomínios por conta)
+- [ ] Multi-tenant SaaS completo (vários condomínios isolados por conta)
 - [ ] Painel de administradora (gerencia vários condomínios)
 - [ ] Notificações por e-mail (convocação, resultado)
 - [ ] Assinatura digital de procurações

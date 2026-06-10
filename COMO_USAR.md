@@ -54,20 +54,21 @@ O terminal mostrará algo como:
 
 ### Administrador:
 
-1. **Assembleia** — Preencha o nome, data e descrição
-2. **Unidades** — Cadastre cada unidade com número e nome do proprietário  
+1. **Condomínio** — Revise ou preencha os dados do condomínio ativo
+2. **Assembleia** — Preencha o nome, data, local e descrição
+3. **Unidades** — Cadastre cada unidade com número, proprietário e CPF
    _(ou importe um CSV com colunas: `numero,proprietario,cpf`)_
-3. **Pautas** — Adicione cada item da ordem do dia
-4. **Iniciar** — Clique em "Abrir Assembleia" e compartilhe o código de acesso
-5. **Painel ao vivo** — Abra/feche a votação de cada pauta individualmente
-6. Ao final, exporte os resultados em **PDF** e/ou **Excel**
+4. **Pautas** — Adicione cada item da ordem do dia
+5. **Iniciar** — Clique em "Abrir Assembleia" e compartilhe o código de acesso
+6. **Painel ao vivo** — Abra/feche a votação de cada pauta individualmente
+7. Ao final, exporte os resultados em **PDF** e/ou **Excel**
 
 ### Participantes:
 
 1. Acessam o link pelo celular/navegador
-2. Inserem o código da assembleia e seu nome
-3. Selecionam a(s) unidade(s) que irão representar
-   - Se **inquilino** ou **representante**: fazem upload da procuração (PDF, JPG ou PNG)
+2. Inserem o código da assembleia e o CPF autorizado pelo administrador
+3. Confirmam a(s) unidade(s) que irão representar
+   - Se **inquilino** ou **representante**, a procuração deve ter sido anexada pelo administrador
 4. Votam em cada pauta quando ela for aberta pelo administrador
 
 ---
@@ -96,6 +97,6 @@ ADMIN_PASSWORD=minhaSenha node server.js
 
 ## Atenção
 
-- Os dados ficam **em memória** — se o servidor for reiniciado durante a assembleia, os dados serão perdidos.
+- Os dados são salvos em `data.json` no uso local ou em PostgreSQL quando `DATABASE_URL` estiver configurada.
 - Mantenha o computador ligado e conectado à rede durante toda a assembleia.
 - Recomenda-se usar uma conexão Wi-Fi estável ou rede local cabeada.

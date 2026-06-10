@@ -20,6 +20,7 @@ const ADMIN_SESSION_MS = 8 * 60 * 60 * 1000;
 const ADMIN_LOGIN_MAX_ATTEMPTS = 5;
 const ADMIN_LOGIN_LOCK_MS = 15 * 60 * 1000;
 const STATE_ROW_KEY = 'main';
+const DEFAULT_CONDOMINIUM_NAME = 'Condomínio Principal';
 
 // ─── Estado em memória ────────────────────────────────────────────────────────
 // units[]:  { id, number, ownerName, ownerCpf,
@@ -32,6 +33,8 @@ const STATE_ROW_KEY = 'main';
 // proxies{}: unitId  → { fileName, mimeType, data(base64), uploadedAt }
 
 let state = {
+  condominiums: [],
+  activeCondominiumId: null,
   assembly    : null,
   units       : [],
   pautas      : [],
@@ -76,6 +79,55 @@ function applyPersistedState(data) {
   state.voters = state.voters || {};
   state.votes = state.votes || {};
   state.proxies = state.proxies || {};
+  ensureSaasState();
+}
+
+function normalizeCondominium(condominium) {
+  const now = new Date().toISOString();
+  const name = String(condominium?.name || DEFAULT_CONDOMINIUM_NAME).trim() || DEFAULT_CONDOMINIUM_NAME;
+  return {
+    id: condominium?.id || uuidv4(),
+    name,
+    document: condominium?.document || '',
+    address: condominium?.address || '',
+    city: condominium?.city || '',
+    state: condominium?.state || '',
+    plan: condominium?.plan || 'starter',
+    status: condominium?.status || 'active',
+    createdAt: condominium?.createdAt || now,
+    updatedAt: condominium?.updatedAt || now,
+  };
+}
+
+function ensureSaasState() {
+  state.condominiums = Array.isArray(state.condominiums)
+    ? state.condominiums.map(normalizeCondominium)
+    : [];
+
+  if (!state.condominiums.length) {
+    state.condominiums.push(normalizeCondominium({
+      name: state.assembly?.condominiumName || DEFAULT_CONDOMINIUM_NAME,
+    }));
+  }
+
+  if (!state.activeCondominiumId || !state.condominiums.some(c => c.id === state.activeCondominiumId)) {
+    state.activeCondominiumId = state.condominiums[0].id;
+  }
+
+  if (state.assembly && !state.assembly.condominiumId) {
+    state.assembly.condominiumId = state.activeCondominiumId;
+  }
+  state.units.forEach(unit => {
+    if (!unit.condominiumId) unit.condominiumId = state.activeCondominiumId;
+  });
+  state.pautas.forEach(pauta => {
+    if (!pauta.condominiumId) pauta.condominiumId = state.activeCondominiumId;
+  });
+}
+
+function getActiveCondominium() {
+  ensureSaasState();
+  return state.condominiums.find(c => c.id === state.activeCondominiumId) || state.condominiums[0];
 }
 
 function createDbPool() {
@@ -189,32 +241,41 @@ function generateCode() {
 }
 function createAdminToken() {
   const token = crypto.randomBytes(32).toString('hex');
-  state.adminSessions.set(token, Date.now() + ADMIN_SESSION_MS);
+  state.adminSessions.set(token, {
+    expiresAt: Date.now() + ADMIN_SESSION_MS,
+    condominiumId: state.activeCondominiumId,
+  });
   return token;
 }
-function isAdmin(req) {
-  const token = req.headers['x-admin-token'];
+function getAdminSession(token) {
   if (!token || !state.adminSessions.has(token)) return false;
-  const expiresAt = state.adminSessions.get(token);
+  const session = state.adminSessions.get(token);
+  const expiresAt = typeof session === 'number' ? session : session.expiresAt;
   if (expiresAt < Date.now()) {
     state.adminSessions.delete(token);
     return false;
   }
-  state.adminSessions.set(token, Date.now() + ADMIN_SESSION_MS);
+  const nextSession = {
+    expiresAt: Date.now() + ADMIN_SESSION_MS,
+    condominiumId: typeof session === 'number'
+      ? state.activeCondominiumId
+      : (session.condominiumId || state.activeCondominiumId),
+  };
+  state.adminSessions.set(token, nextSession);
+  return nextSession;
+}
+function isAdmin(req) {
+  const token = req.headers['x-admin-token'];
+  const session = getAdminSession(token);
+  if (!session) return false;
+  req.adminSession = session;
   return true;
 }
 function normCpf(cpf) {
   return (cpf || '').replace(/\D/g, '');
 }
 function isAdminToken(token) {
-  if (!token || !state.adminSessions.has(token)) return false;
-  const expiresAt = state.adminSessions.get(token);
-  if (expiresAt < Date.now()) {
-    state.adminSessions.delete(token);
-    return false;
-  }
-  state.adminSessions.set(token, Date.now() + ADMIN_SESSION_MS);
-  return true;
+  return !!getAdminSession(token);
 }
 function getClientKey(req) {
   const forwarded = (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
@@ -245,8 +306,15 @@ function publicPautas() {
 function publicAssembly() {
   return state.assembly ? { ...state.assembly } : null;
 }
+function publicCondominium() {
+  const condominium = getActiveCondominium();
+  return condominium ? { ...condominium } : null;
+}
 function statePayload(includePrivate = false) {
   return {
+    condominium: publicCondominium(),
+    activeCondominiumId: state.activeCondominiumId,
+    condominiums: includePrivate ? state.condominiums.map(c => ({ ...c })) : undefined,
     assembly: publicAssembly(),
     units   : includePrivate ? state.units : publicUnits(),
     pautas  : publicPautas(),
@@ -384,6 +452,62 @@ app.post('/api/admin/login', (req, res) => {
   }
 });
 
+// ─── SaaS: condomínio atual ───────────────────────────────────────────────────
+app.get('/api/condominiums', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Não autorizado' });
+  ensureSaasState();
+  res.json({
+    condominiums: state.condominiums,
+    activeCondominiumId: state.activeCondominiumId,
+    activeCondominium: getActiveCondominium(),
+  });
+});
+
+app.post('/api/condominiums', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Não autorizado' });
+  const { name, document, address, city, state: uf, plan, status } = req.body;
+  if (!name || !String(name).trim()) {
+    return res.status(400).json({ error: 'Nome do condomínio é obrigatório' });
+  }
+
+  const condominium = normalizeCondominium({
+    name, document, address, city, state: uf, plan, status,
+  });
+  state.condominiums.push(condominium);
+  saveState();
+  res.status(201).json(condominium);
+});
+
+app.put('/api/condominiums/current', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Não autorizado' });
+  ensureSaasState();
+
+  const condominium = getActiveCondominium();
+  const { name, document, address, city, state: uf, plan, status } = req.body;
+  if (!name || !String(name).trim()) {
+    return res.status(400).json({ error: 'Nome do condomínio é obrigatório' });
+  }
+
+  Object.assign(condominium, {
+    name: String(name).trim(),
+    document: document || '',
+    address: address || '',
+    city: city || '',
+    state: uf || '',
+    plan: plan || condominium.plan || 'starter',
+    status: status || condominium.status || 'active',
+    updatedAt: new Date().toISOString(),
+  });
+
+  if (state.assembly) state.assembly.condominiumId = condominium.id;
+  state.units.forEach(unit => { unit.condominiumId = condominium.id; });
+  state.pautas.forEach(pauta => { pauta.condominiumId = condominium.id; });
+
+  broadcastState();
+  saveState();
+  res.json(condominium);
+});
+
 app.get('/api/assembly', (req, res) => {
   if (isAdmin(req)) return res.json(state.assembly);
   res.json(publicAssembly());
@@ -401,6 +525,7 @@ app.post('/api/assembly', (req, res) => {
 
   state.assembly = {
     id           : uuidv4(),
+    condominiumId: state.activeCondominiumId,
     name, date,
     description  : description  || '',
     location     : location     || '',
@@ -513,6 +638,7 @@ app.post('/api/units', (req, res) => {
     return res.status(400).json({ error: 'Nome e CPF do representante são obrigatórios' });
   const unit = {
     id: uuidv4(),
+    condominiumId: state.activeCondominiumId,
     number   : String(number),
     ownerName, ownerCpf,
     authorizedVoter: {
@@ -558,6 +684,7 @@ app.post('/api/units/batch', (req, res) => {
     if (state.units.find(e => e.number === String(u.numero))) return;
     const unit = {
       id: uuidv4(),
+      condominiumId: state.activeCondominiumId,
       number   : String(u.numero),
       ownerName: u.proprietario,
       ownerCpf : u.cpf,
@@ -624,6 +751,7 @@ app.post('/api/pautas', (req, res) => {
   if (!title) return res.status(400).json({ error: 'Título obrigatório' });
   const pauta = {
     id          : uuidv4(),
+    condominiumId: state.activeCondominiumId,
     order       : state.pautas.length + 1,
     title, description: description || '',
     quorum      : quorum || 'simples',
@@ -859,8 +987,9 @@ app.post('/api/admin/seed', (req, res) => {
   if (!isAdmin(req)) return res.status(403).json({ error: 'Não autorizado' });
   Object.values(state.pautaTimers || {}).forEach(t => clearTimeout(t));
 
+  const demoCondoId = uuidv4();
   const mkUnit = (number, ownerName, ownerCpf, voterName, voterCpf, isOwner) => ({
-    id: uuidv4(), number, ownerName, ownerCpf,
+    id: uuidv4(), condominiumId: demoCondoId, number, ownerName, ownerCpf,
     authorizedVoter: {
       name    : voterName || ownerName,
       cpf     : voterCpf  || ownerCpf,
@@ -887,16 +1016,16 @@ app.post('/api/admin/seed', (req, res) => {
 
   const p1 = uuidv4(), p2 = uuidv4(), p3 = uuidv4();
   const pautas = [
-    { id: p1, order: 1, title: 'Aprovação das contas do exercício 2025',
+    { id: p1, condominiumId: demoCondoId, order: 1, title: 'Aprovação das contas do exercício 2025',
       description: 'Prestação de contas da administração referente ao ano de 2025, incluindo receitas, despesas e saldo final.',
       quorum: 'simples', timerMinutes: null, status: 'closed', timerEnd: null,
       result: 'aprovado',
       resultDetail: { sim: 8, nao: 2, abstencao: 2, total: 12, needed: 5, quorumType: 'simples', criterion: 'Maioria simples (Sim > Não)' } },
-    { id: p2, order: 2, title: 'Reajuste da taxa de condomínio — 8%',
+    { id: p2, condominiumId: demoCondoId, order: 2, title: 'Reajuste da taxa de condomínio — 8%',
       description: 'Proposta de reajuste de 8% na taxa mensal a partir de julho/2026 em razão do aumento dos custos operacionais.',
       quorum: 'simples', timerMinutes: 3, status: 'open', timerEnd: null,
       result: null, resultDetail: null },
-    { id: p3, order: 3, title: 'Reforma da área de lazer',
+    { id: p3, condominiumId: demoCondoId, order: 3, title: 'Reforma da área de lazer',
       description: 'Aprovação de orçamento de R$ 45.000,00 para reforma da piscina, academia e salão de festas. Verba rateada em 12 meses.',
       quorum: '2/3', timerMinutes: null, status: 'pending', timerEnd: null,
       result: null, resultDetail: null },
@@ -924,7 +1053,16 @@ app.post('/api/admin/seed', (req, res) => {
   });
 
   state = {
-    assembly: { id: uuidv4(), name: 'Assembleia Geral Ordinária — Ed. Solar das Acácias',
+    condominiums: [normalizeCondominium({
+      id: demoCondoId,
+      name: 'Ed. Solar das Acácias',
+      address: 'Rua das Palmeiras, 120',
+      city: 'São Paulo',
+      state: 'SP',
+      plan: 'starter',
+    })],
+    activeCondominiumId: demoCondoId,
+    assembly: { id: uuidv4(), condominiumId: demoCondoId, name: 'Assembleia Geral Ordinária — Ed. Solar das Acácias',
       date: new Date().toISOString().split('T')[0],
       description: 'Salão de Festas — 19h30',
       location: 'Rua das Palmeiras, 120', quorumInstall: 25,
@@ -942,6 +1080,7 @@ app.post('/api/admin/seed', (req, res) => {
 // ─── Start ────────────────────────────────────────────────────────────────────
 async function startServer() {
   await loadState();
+  ensureSaasState();
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n✅  Servidor rodando em http://localhost:${PORT}`);
     console.log(`💾  Persistência: ${useDatabase ? 'PostgreSQL' : 'data.json local'}`);
