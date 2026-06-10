@@ -14,10 +14,15 @@
       --gold-600: #be8d12;
       --gold-500: #d6aa18;
       --gold-300: #f2ca3d;
-      --paper: #f7f6f1;
-      --surface: #ffffff;
-      --surface-2: #eeece2;
-      --line: #dedbcc;
+      --teal-700: #1e6f73;
+      --blue-700: #315f91;
+      --violet-700: #6b4a86;
+      --rose-700: #a14f64;
+      --paper: #ece9dc;
+      --surface: #fffcf3;
+      --surface-2: #e7e1d1;
+      --surface-3: #f5f0e4;
+      --line: #d3c8ae;
       --graphite: #242821;
       --muted: #73786a;
       --red: #a33a2b;
@@ -34,8 +39,10 @@
       color: var(--graphite);
       font-family: Inter, "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
       background:
-        linear-gradient(180deg, rgba(255,255,255,.76), rgba(247,246,241,.94) 280px),
-        repeating-linear-gradient(90deg, rgba(38,53,21,.03) 0 1px, transparent 1px 84px),
+        linear-gradient(180deg, rgba(236,233,220,.82), rgba(223,216,197,.94) 360px),
+        radial-gradient(circle at 20% 0%, rgba(214,170,24,.16), transparent 34%),
+        radial-gradient(circle at 82% 10%, rgba(30,111,115,.12), transparent 30%),
+        repeating-linear-gradient(90deg, rgba(38,53,21,.04) 0 1px, transparent 1px 84px),
         var(--paper);
       letter-spacing: 0;
     }
@@ -148,8 +155,8 @@
     }
 
     .panel {
-      background: rgba(255,255,255,.92);
-      border: 1px solid rgba(38,53,21,.13);
+      background: rgba(255,252,243,.94);
+      border: 1px solid rgba(38,53,21,.18);
       border-radius: 8px;
       box-shadow: var(--shadow-sm);
     }
@@ -324,6 +331,55 @@
 
     .phase {
       overflow: hidden;
+      --phase-accent: var(--olive-700);
+      --phase-accent-2: var(--gold-600);
+      --phase-tint: #f6f1df;
+      --phase-body: #fbf7eb;
+      background: var(--phase-body);
+      border-left: 7px solid var(--phase-accent);
+      box-shadow: 0 12px 28px rgba(49, 58, 41, .1);
+    }
+
+    .phase[data-phase="fase-0"] {
+      --phase-accent: #6d7d2f;
+      --phase-accent-2: #d6aa18;
+      --phase-tint: #f5edcf;
+      --phase-body: #fbf6e5;
+    }
+
+    .phase[data-phase="fase-1"] {
+      --phase-accent: #1e6f73;
+      --phase-accent-2: #6b8f91;
+      --phase-tint: #dceeed;
+      --phase-body: #edf7f5;
+    }
+
+    .phase[data-phase="fase-2"] {
+      --phase-accent: #315f91;
+      --phase-accent-2: #8aa9ca;
+      --phase-tint: #dde8f4;
+      --phase-body: #eef5fb;
+    }
+
+    .phase[data-phase="fase-3"] {
+      --phase-accent: #6b4a86;
+      --phase-accent-2: #b69bc5;
+      --phase-tint: #eadff0;
+      --phase-body: #f6f0f8;
+    }
+
+    .phase[data-phase="fase-4"] {
+      --phase-accent: #a14f64;
+      --phase-accent-2: #d09aa6;
+      --phase-tint: #f3dfe5;
+      --phase-body: #fbf1f4;
+    }
+
+    .phase[data-phase="fase-5"] {
+      --phase-accent: #8a6424;
+      --phase-accent-2: #d1ad63;
+      --phase-tint: #f2e4c5;
+      --phase-body: #fbf4e5;
     }
 
     .phase-header {
@@ -332,8 +388,10 @@
       gap: 16px;
       align-items: start;
       padding: 18px;
-      background: linear-gradient(180deg, #fff, #fbfaf4);
-      border-bottom: 1px solid var(--line);
+      background:
+        linear-gradient(90deg, color-mix(in srgb, var(--phase-accent) 15%, transparent), transparent 58%),
+        linear-gradient(180deg, var(--surface), var(--phase-tint));
+      border-bottom: 1px solid color-mix(in srgb, var(--phase-accent) 28%, var(--line));
     }
 
     .phase-title {
@@ -349,9 +407,10 @@
       display: grid;
       place-items: center;
       border-radius: 8px;
-      background: var(--olive-900);
-      color: var(--gold-300);
+      background: linear-gradient(180deg, var(--phase-accent), color-mix(in srgb, var(--phase-accent) 74%, #000));
+      color: #fff;
       font-weight: 900;
+      box-shadow: inset 0 -3px 0 rgba(0,0,0,.14);
       flex: 0 0 auto;
     }
 
@@ -387,16 +446,18 @@
       white-space: nowrap;
     }
 
-    .pill.status-nao-iniciado { background: #efede3; color: #5d6255; border-color: #ddd8c8; }
-    .pill.status-em-andamento { background: #e7f0f7; color: var(--blue); border-color: #c6d9e6; }
-    .pill.status-pendente { background: #fff5d6; color: #7a5708; border-color: #ead181; }
-    .pill.status-bloqueado { background: #f9e0dc; color: var(--red); border-color: #e9b8b0; }
-    .pill.status-concluido { background: #e3f1df; color: var(--green); border-color: #bfd9b8; }
+    .pill.status-nao-iniciado { background: #e6e2d5; color: #555b50; border-color: #c9c1ad; }
+    .pill.status-em-andamento { background: #d9edf0; color: #175e63; border-color: #9fcdd0; }
+    .pill.status-pendente { background: #fff0bc; color: #705003; border-color: #e4c45b; }
+    .pill.status-bloqueado { background: #f7d7d1; color: var(--red); border-color: #dd9d94; }
+    .pill.status-concluido { background: #d9ecd1; color: #2f6c2a; border-color: #9fca96; }
 
     .phase-body {
       padding: 16px 18px 18px;
       display: grid;
       gap: 14px;
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--phase-body) 88%, #fff), var(--phase-body));
     }
 
     .phase-grid {
@@ -409,8 +470,9 @@
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 11px;
-      background: #fffefa;
+      background: rgba(255,255,255,.68);
       min-height: 76px;
+      box-shadow: inset 0 3px 0 color-mix(in srgb, var(--phase-accent) 30%, transparent);
     }
 
     .mini-card span {
@@ -440,9 +502,10 @@
       gap: 10px;
       align-items: start;
       padding: 10px;
-      border: 1px solid var(--line);
+      border: 1px solid color-mix(in srgb, var(--phase-accent) 18%, var(--line));
       border-radius: 8px;
-      background: #fff;
+      background: rgba(255,255,255,.78);
+      box-shadow: inset 4px 0 0 color-mix(in srgb, var(--phase-accent) 42%, transparent);
     }
 
     .deliverable-title strong {
@@ -472,8 +535,8 @@
     }
 
     .note {
-      background: #fbfaf4;
-      border-left: 4px solid var(--gold-500);
+      background: rgba(255,255,255,.72);
+      border-left: 4px solid var(--phase-accent);
       border-radius: 8px;
       padding: 10px 12px;
       color: var(--graphite);
@@ -493,9 +556,9 @@
       color: var(--muted);
       font-size: .9rem;
       padding: 14px;
-      border: 1px dashed #cac5b2;
+      border: 1px dashed color-mix(in srgb, var(--phase-accent) 28%, #cac5b2);
       border-radius: 8px;
-      background: rgba(255,255,255,.58);
+      background: rgba(255,255,255,.5);
     }
 
     .footer {
@@ -644,6 +707,10 @@
         {
           "date": "2026-06-09",
           "text": "Pasta local reorganizada para D:\\PROJETOS_PESSOAIS\\PROJETO_QUORUM_HUB."
+        },
+        {
+          "date": "2026-06-10",
+          "text": "Paleta visual do Project Tracker revisada para diferenciar melhor fases, entregas, status e observacoes."
         }
       ],
       "deliverables": [
