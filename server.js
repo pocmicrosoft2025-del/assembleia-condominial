@@ -31,6 +31,7 @@ const DEFAULT_CONDOMINIUM_NAME = 'Condomínio Principal';
 // votes{}:   pautaId → { unitId: { vote, voterId, hasProxy, unitNumber,
 //                                  voterName, timestamp } }
 // proxies{}: unitId  → { fileName, mimeType, data(base64), uploadedAt }
+// auditLog[]: eventos relevantes para rastreabilidade operacional
 
 let state = {
   condominiums: [],
@@ -41,6 +42,7 @@ let state = {
   voters      : {},
   votes       : {},
   proxies     : {},
+  auditLog    : [],
   adminSockets: new Set(),
   pautaTimers : {},
   adminSessions: new Map(),
@@ -79,6 +81,7 @@ function applyPersistedState(data) {
   state.voters = state.voters || {};
   state.votes = state.votes || {};
   state.proxies = state.proxies || {};
+  state.auditLog = Array.isArray(state.auditLog) ? state.auditLog : [];
   ensureSaasState();
 }
 
@@ -294,6 +297,34 @@ function formatRemainingLock(ms) {
   const minutes = Math.ceil(ms / 60000);
   return `${minutes} minuto${minutes === 1 ? '' : 's'}`;
 }
+function maskCpf(cpf) {
+  const digits = normCpf(cpf);
+  if (digits.length !== 11) return cpf ? '***' : '';
+  return `${digits.slice(0, 3)}.***.***-${digits.slice(-2)}`;
+}
+function auditDetails(details = {}) {
+  return Object.fromEntries(
+    Object.entries(details)
+      .filter(([, value]) => value !== undefined && value !== null && value !== '')
+      .map(([key, value]) => [key, value])
+  );
+}
+function addAuditEvent(type, message, details = {}) {
+  const event = {
+    id: uuidv4(),
+    type,
+    message,
+    details: auditDetails(details),
+    condominiumId: state.activeCondominiumId || state.assembly?.condominiumId || null,
+    assemblyId: state.assembly?.id || null,
+    createdAt: new Date().toISOString(),
+  };
+  state.auditLog = Array.isArray(state.auditLog) ? state.auditLog : [];
+  state.auditLog.unshift(event);
+  state.auditLog = state.auditLog.slice(0, 300);
+  state.adminSockets.forEach(sid => io.to(sid).emit('audit_update', state.auditLog));
+  return event;
+}
 function publicUnits() {
   return state.units.map(u => ({
     id: u.id,
@@ -318,6 +349,7 @@ function statePayload(includePrivate = false) {
     assembly: publicAssembly(),
     units   : includePrivate ? state.units : publicUnits(),
     pautas  : publicPautas(),
+    auditLog: includePrivate ? state.auditLog : undefined,
   };
 }
 function getPresentUnitIds() {
@@ -421,6 +453,11 @@ app.post('/api/admin/login', (req, res) => {
 
   if (attempt.lockedUntil && attempt.lockedUntil > Date.now()) {
     const remainingMs = attempt.lockedUntil - Date.now();
+    addAuditEvent('admin_login_blocked', 'Tentativa de login bloqueada temporariamente', {
+      ip: clientKey,
+      retryAfter: formatRemainingLock(remainingMs),
+    });
+    saveState();
     return res.status(429).json({
       error: `Muitas tentativas incorretas. Tente novamente em ${formatRemainingLock(remainingMs)}.`,
       locked: true,
@@ -430,11 +467,18 @@ app.post('/api/admin/login', (req, res) => {
 
   if (password === ADMIN_PASSWORD) {
     state.adminLoginAttempts.delete(clientKey);
+    addAuditEvent('admin_login_success', 'Administrador acessou o sistema', { ip: clientKey });
+    saveState();
     res.json({ success: true, token: createAdminToken() });
   } else {
     const nextCount = attempt.count + 1;
     const lockedUntil = nextCount >= ADMIN_LOGIN_MAX_ATTEMPTS ? Date.now() + ADMIN_LOGIN_LOCK_MS : 0;
     state.adminLoginAttempts.set(clientKey, { count: nextCount, lockedUntil });
+    addAuditEvent(lockedUntil ? 'admin_login_locked' : 'admin_login_failed', 'Tentativa de login administrativo sem sucesso', {
+      ip: clientKey,
+      attemptsRemaining: Math.max(ADMIN_LOGIN_MAX_ATTEMPTS - nextCount, 0),
+    });
+    saveState();
 
     if (lockedUntil) {
       return res.status(429).json({
@@ -474,6 +518,11 @@ app.post('/api/condominiums', (req, res) => {
     name, document, address, city, state: uf, plan, status,
   });
   state.condominiums.push(condominium);
+  addAuditEvent('condominium_created', `Condomínio cadastrado: ${condominium.name}`, {
+    condominiumName: condominium.name,
+    city: condominium.city,
+    state: condominium.state,
+  });
   saveState();
   res.status(201).json(condominium);
 });
@@ -503,6 +552,11 @@ app.put('/api/condominiums/current', (req, res) => {
   state.units.forEach(unit => { unit.condominiumId = condominium.id; });
   state.pautas.forEach(pauta => { pauta.condominiumId = condominium.id; });
 
+  addAuditEvent('condominium_updated', `Dados do condomínio atualizados: ${condominium.name}`, {
+    condominiumName: condominium.name,
+    city: condominium.city,
+    state: condominium.state,
+  });
   broadcastState();
   saveState();
   res.json(condominium);
@@ -535,7 +589,12 @@ app.post('/api/assembly', (req, res) => {
     createdAt    : new Date().toISOString(),
   };
   state.units = []; state.pautas = []; state.voters = {};
-  state.votes = {}; state.proxies = {}; state.pautaTimers = {};
+  state.votes = {}; state.proxies = {}; state.pautaTimers = {}; state.auditLog = [];
+  addAuditEvent('assembly_created', `Assembleia criada: ${state.assembly.name}`, {
+    date: state.assembly.date,
+    location: state.assembly.location,
+    accessCode: state.assembly.accessCode,
+  });
 
   broadcastState(); saveState();
   res.json(state.assembly);
@@ -550,6 +609,11 @@ app.put('/api/assembly', (req, res) => {
   if (description  !== undefined)    state.assembly.description   = description;
   if (location     !== undefined)    state.assembly.location      = location;
   if (quorumInstall !== undefined)   state.assembly.quorumInstall = quorumInstall;
+  addAuditEvent('assembly_updated', `Assembleia atualizada: ${state.assembly.name}`, {
+    date: state.assembly.date,
+    location: state.assembly.location,
+    quorumInstall: state.assembly.quorumInstall,
+  });
   broadcastState(); saveState();
   res.json(state.assembly);
 });
@@ -558,6 +622,9 @@ app.post('/api/assembly/regenerate-code', (req, res) => {
   if (!isAdmin(req)) return res.status(403).json({ error: 'Não autorizado' });
   if (!state.assembly) return res.status(404).json({ error: 'Assembleia não criada' });
   state.assembly.accessCode = generateCode();
+  addAuditEvent('access_code_regenerated', 'Código de acesso da assembleia foi regenerado', {
+    accessCode: state.assembly.accessCode,
+  });
   broadcastState(); saveState();
   res.json({ accessCode: state.assembly.accessCode });
 });
@@ -586,6 +653,10 @@ app.post('/api/assembly/open', (req, res) => {
     });
   }
   state.assembly.status = 'open';
+  addAuditEvent('assembly_opened', 'Assembleia aberta com quórum de instalação atendido', {
+    presentUnits: present,
+    requiredUnits: minRequired,
+  });
   broadcastState(); saveState();
   res.json({ status: 'open' });
 });
@@ -595,6 +666,10 @@ app.post('/api/assembly/force-open', (req, res) => {
   if (!isAdmin(req)) return res.status(403).json({ error: 'Não autorizado' });
   if (!state.assembly) return res.status(404).json({ error: 'Assembleia não criada' });
   state.assembly.status = 'open';
+  addAuditEvent('assembly_force_opened', 'Assembleia aberta manualmente sem quórum de instalação', {
+    presentUnits: getPresentUnitIds().size,
+    totalUnits: state.units.length,
+  });
   broadcastState(); saveState();
   res.json({ status: 'open' });
 });
@@ -615,6 +690,10 @@ app.post('/api/assembly/close', (req, res) => {
       const r    = calculatePautaResult(p);
       p.result   = r.result; p.resultDetail = r.resultDetail;
     }
+  });
+  addAuditEvent('assembly_closed', 'Assembleia encerrada', {
+    voters: Object.keys(state.voters || {}).length,
+    pautas: state.pautas.length,
   });
   broadcastState(); broadcastResults(); saveState();
   res.json({ status: 'closed' });
@@ -649,6 +728,12 @@ app.post('/api/units', (req, res) => {
     },
   };
   state.units.push(unit);
+  addAuditEvent('unit_created', `Unidade ${unit.number} cadastrada`, {
+    unitNumber: unit.number,
+    ownerName: unit.ownerName,
+    voterName: unit.authorizedVoter.name,
+    voterType: ownerIsVoter ? 'proprietario' : 'representante',
+  });
   broadcastState(); saveState();
   res.json(unit);
 });
@@ -669,6 +754,12 @@ app.put('/api/units/:id', (req, res) => {
     isOwner : ownerIsVoter,
     hasProxy: unit.authorizedVoter.hasProxy,
   };
+  addAuditEvent('unit_updated', `Unidade ${unit.number} atualizada`, {
+    unitNumber: unit.number,
+    ownerName: unit.ownerName,
+    voterName: unit.authorizedVoter.name,
+    voterType: ownerIsVoter ? 'proprietario' : 'representante',
+  });
   broadcastState(); saveState();
   res.json(unit);
 });
@@ -694,18 +785,31 @@ app.post('/api/units/batch', (req, res) => {
     created.push(unit);
     added++;
   });
+  if (added) {
+    addAuditEvent('units_imported', `${added} unidade(s) importada(s) por CSV`, {
+      added,
+      units: created.map(u => u.number).join(', '),
+    });
+  }
   broadcastState(); saveState();
   res.json({ added, units: created });
 });
 
 app.delete('/api/units/:id', (req, res) => {
   if (!isAdmin(req)) return res.status(403).json({ error: 'Não autorizado' });
+  const removed = state.units.find(u => u.id === req.params.id);
   state.units = state.units.filter(u => u.id !== req.params.id);
   delete state.proxies[req.params.id];
   Object.values(state.votes || {}).forEach(votesByUnit => delete votesByUnit[req.params.id]);
   Object.values(state.voters || {}).forEach(v => {
     v.unitIds = (v.unitIds || []).filter(u => u.unitId !== req.params.id);
   });
+  if (removed) {
+    addAuditEvent('unit_deleted', `Unidade ${removed.number} removida`, {
+      unitNumber: removed.number,
+      ownerName: removed.ownerName,
+    });
+  }
   broadcastState(); saveState();
   res.json({ ok: true });
 });
@@ -727,6 +831,11 @@ app.post('/api/proxy/:unitId', upload.single('proxy'), (req, res) => {
     unitId: unit.id,
     unitNumber: unit.number,
     fileName: req.file.originalname,
+  });
+  addAuditEvent('proxy_uploaded', `Procuração anexada para a unidade ${unit.number}`, {
+    unitNumber: unit.number,
+    fileName: req.file.originalname,
+    voterName: unit.authorizedVoter?.name,
   });
   broadcastState(); saveState();
   res.json({ success: true, fileName: req.file.originalname });
@@ -762,6 +871,11 @@ app.post('/api/pautas', (req, res) => {
     resultDetail: null,
   };
   state.pautas.push(pauta);
+  addAuditEvent('pauta_created', `Pauta cadastrada: ${pauta.title}`, {
+    pautaTitle: pauta.title,
+    quorum: pauta.quorum,
+    timerMinutes: pauta.timerMinutes,
+  });
   broadcastState(); saveState();
   res.json(pauta);
 });
@@ -775,13 +889,24 @@ app.put('/api/pautas/:id', (req, res) => {
   if (description !== undefined)  p.description  = description;
   if (quorum)                     p.quorum       = quorum;
   if (timerMinutes !== undefined) p.timerMinutes = timerMinutes;
+  addAuditEvent('pauta_updated', `Pauta atualizada: ${p.title}`, {
+    pautaTitle: p.title,
+    quorum: p.quorum,
+    timerMinutes: p.timerMinutes,
+  });
   broadcastState(); saveState();
   res.json(p);
 });
 
 app.delete('/api/pautas/:id', (req, res) => {
   if (!isAdmin(req)) return res.status(403).json({ error: 'Não autorizado' });
+  const removed = state.pautas.find(p => p.id === req.params.id);
   state.pautas = state.pautas.filter(p => p.id !== req.params.id);
+  if (removed) {
+    addAuditEvent('pauta_deleted', `Pauta removida: ${removed.title}`, {
+      pautaTitle: removed.title,
+    });
+  }
   broadcastState(); saveState();
   res.json({ ok: true });
 });
@@ -798,6 +923,10 @@ app.post('/api/pautas/:id/open', (req, res) => {
       p.status = 'closed'; p.timerEnd = null;
       const r = calculatePautaResult(p);
       p.result = r.result; p.resultDetail = r.resultDetail;
+      addAuditEvent('pauta_closed_auto', `Pauta encerrada automaticamente: ${p.title}`, {
+        pautaTitle: p.title,
+        result: p.result,
+      });
       io.emit('pauta_closed', { pautaId: p.id, title: p.title, result: p.result });
     }
   });
@@ -813,6 +942,11 @@ app.post('/api/pautas/:id/open', (req, res) => {
         p.status = 'closed'; p.timerEnd = null;
         const r = calculatePautaResult(p);
         p.result = r.result; p.resultDetail = r.resultDetail;
+        addAuditEvent('pauta_closed_timer', `Votação encerrada por tempo: ${p.title}`, {
+          pautaTitle: p.title,
+          result: p.result,
+          totalVotes: p.resultDetail?.total,
+        });
         broadcastState(); broadcastResults(); saveState();
         io.emit('pauta_closed', { pautaId: p.id, title: p.title, result: p.result });
       }
@@ -822,6 +956,11 @@ app.post('/api/pautas/:id/open', (req, res) => {
   }
 
   broadcastState(); broadcastResults(); saveState();
+  addAuditEvent('pauta_opened', `Votação aberta: ${pauta.title}`, {
+    pautaTitle: pauta.title,
+    timerMinutes: timerMin || null,
+  });
+  saveState();
   io.emit('pauta_opened', { pautaId: pauta.id, title: pauta.title });
   res.json(pauta);
 });
@@ -835,6 +974,11 @@ app.post('/api/pautas/:id/close', (req, res) => {
   pauta.status = 'closed'; pauta.timerEnd = null;
   const r = calculatePautaResult(pauta);
   pauta.result = r.result; pauta.resultDetail = r.resultDetail;
+  addAuditEvent('pauta_closed', `Votação encerrada: ${pauta.title}`, {
+    pautaTitle: pauta.title,
+    result: pauta.result,
+    totalVotes: pauta.resultDetail?.total,
+  });
   broadcastState(); broadcastResults(); saveState();
   io.emit('pauta_closed', { pautaId: pauta.id, title: pauta.title, result: pauta.result });
   res.json(pauta);
@@ -909,12 +1053,31 @@ app.post('/api/vote', (req, res) => {
     voterName  : voter.name,
     timestamp  : new Date().toISOString(),
   };
+  addAuditEvent('vote_registered', `Voto registrado para unidade ${unit.number} na pauta "${pauta.title}"`, {
+    unitNumber: unit.number,
+    pautaTitle: pauta.title,
+    voterName: voter.name,
+    vote,
+    hasProxy: !!state.proxies[unitId],
+  });
   broadcastResults(); saveState();
   res.json({ success: true });
 });
 
 // ─── Resultados / Participantes ───────────────────────────────────────────────
 app.get('/api/results', (req, res) => res.json(resultPayload(isAdmin(req))));
+app.get('/api/audit', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Não autorizado' });
+  res.json(state.auditLog || []);
+});
+app.post('/api/audit', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Não autorizado' });
+  const { type, message, details } = req.body || {};
+  if (!type || !message) return res.status(400).json({ error: 'Tipo e mensagem são obrigatórios' });
+  const event = addAuditEvent(String(type), String(message), details || {});
+  saveState();
+  res.status(201).json(event);
+});
 app.get('/api/voters',  (req, res) => {
   if (!isAdmin(req)) return res.status(403).json({ error: 'Não autorizado' });
   res.json(Object.values(state.voters));
@@ -932,6 +1095,7 @@ io.on('connection', (socket) => {
     socket.emit('results_update', resultPayload(true));
     socket.emit('admin_state', {
       voters : Object.values(state.voters),
+      auditLog: state.auditLog || [],
       proxies: Object.keys(state.proxies).map(uid => ({
         unitId    : uid,
         fileName  : state.proxies[uid].fileName,
@@ -969,6 +1133,11 @@ io.on('connection', (socket) => {
     };
     state.voters[socket.id] = voter;
     state.adminSockets.forEach(sid => io.to(sid).emit('voter_registered', voter));
+    addAuditEvent('voter_registered', `Participante entrou: ${voter.name}`, {
+      voterName: voter.name,
+      cpf: maskCpf(cpf),
+      units: authorizedUnits.map(u => u.number).join(', '),
+    });
     saveState();
     socket.emit('registration_ok', {
       voterId: socket.id,
@@ -1051,6 +1220,35 @@ app.post('/api/admin/seed', (req, res) => {
       unitIds: [{ unitId: u.id, isOwner: u.authorizedVoter.isOwner, hasProxy: u.authorizedVoter.hasProxy }],
       registeredAt: new Date().toISOString() };
   });
+  const demoAuditLog = [
+    {
+      id: uuidv4(),
+      type: 'assembly_opened',
+      message: 'Assembleia demo aberta',
+      details: { presentUnits: 8, requiredUnits: 3 },
+      condominiumId: demoCondoId,
+      assemblyId: null,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: uuidv4(),
+      type: 'pauta_opened',
+      message: 'Votação aberta: Reajuste da taxa de condomínio — 8%',
+      details: { pautaTitle: 'Reajuste da taxa de condomínio — 8%', timerMinutes: 3 },
+      condominiumId: demoCondoId,
+      assemblyId: null,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: uuidv4(),
+      type: 'vote_registered',
+      message: 'Votos demo carregados para apresentação',
+      details: { totalVotes: 19 },
+      condominiumId: demoCondoId,
+      assemblyId: null,
+      createdAt: new Date().toISOString(),
+    },
+  ];
 
   state = {
     condominiums: [normalizeCondominium({
@@ -1067,7 +1265,7 @@ app.post('/api/admin/seed', (req, res) => {
       description: 'Salão de Festas — 19h30',
       location: 'Rua das Palmeiras, 120', quorumInstall: 25,
       accessCode: 'DEMO01', status: 'open', createdAt: new Date().toISOString() },
-    units, pautas, voters, votes, proxies: {},
+    units, pautas, voters, votes, proxies: {}, auditLog: demoAuditLog,
     adminSockets: state.adminSockets,
     pautaTimers : {},
     adminSessions: state.adminSessions,

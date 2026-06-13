@@ -65,6 +65,8 @@ O terminal mostrará algo como:
 
 Na tela **Iniciar**, use os botões **Copiar código**, **Copiar link** ou **Copiar convite** para enviar o acesso aos participantes por WhatsApp, e-mail ou outro canal combinado. O mesmo atalho de link/convite também aparece no painel ao vivo.
 
+No **Painel ao vivo**, acompanhe o card **Auditoria** para verificar os principais eventos da assembleia, como abertura, entrada de participantes, abertura/fechamento de pauta, votos registrados e encerramento. A exportação em Excel inclui uma aba **Auditoria** com o histórico completo disponível.
+
 ### Participantes:
 
 1. Acessam o link pelo celular/navegador

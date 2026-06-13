@@ -1111,6 +1111,10 @@
         {
           "date": "2026-06-13",
           "text": "Iniciada preparacao do produto para demonstracao com sindicos: tela de inicio e painel ao vivo receberam atalhos para copiar codigo, link de participante e convite pronto."
+        },
+        {
+          "date": "2026-06-13",
+          "text": "Implementada auditoria operacional basica: eventos criticos passam a ser registrados no backend, exibidos no painel ao vivo, resumidos no PDF e exportados no Excel."
         }
       ],
       "deliverables": [
@@ -1130,16 +1134,16 @@
           "status": "em-andamento",
           "owner": "Produto/Fullstack",
           "dependsOn": "Modelo de dados normalizado",
-          "notes": "Fluxo de convite e compartilhamento melhorado para piloto; ainda faltam validacoes completas de assembleia real, auditoria e ambiente web."
+          "notes": "Fluxo de convite e compartilhamento melhorado para piloto; auditoria operacional basica adicionada; ainda faltam validacoes completas de assembleia real e ambiente web."
         },
         {
           "id": "f3-d3",
           "title": "Auditoria",
           "description": "Registrar eventos relevantes: login, cadastro, voto, abertura, fechamento, exportacao.",
-          "status": "nao-iniciado",
+          "status": "em-andamento",
           "owner": "Backend",
           "dependsOn": "Modelo de auditoria",
-          "notes": "Importante para confianca juridica."
+          "notes": "Primeira versao registra eventos operacionais em auditLog persistido, exibe no painel do admin, resume no PDF e exporta aba Auditoria no Excel. Ainda precisa evoluir para trilha juridica mais robusta com usuarios reais, IPs/contexto e modelo normalizado."
         },
         {
           "id": "f3-d4",
@@ -1148,7 +1152,7 @@
           "status": "em-andamento",
           "owner": "Documentacao",
           "dependsOn": "Fluxos finais da fase 3",
-          "notes": "Manual de uso atualizado com orientacao de compartilhamento por codigo, link e convite pronto."
+          "notes": "Manual de uso atualizado com orientacao de compartilhamento por codigo, link, convite pronto e acompanhamento de auditoria no painel."
         }
       ]
     },

@@ -533,6 +533,46 @@
       font-weight: 700;
       min-height: 34px;
     }
+    .audit-list {
+      display: grid;
+      gap: .55rem;
+    }
+    .audit-item {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: .55rem;
+      padding: .62rem .7rem;
+      border: 1px solid rgba(11,31,42,.08);
+      border-radius: 8px;
+      background: linear-gradient(180deg, #ffffff, var(--surface-2));
+    }
+    .audit-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      margin-top: .35rem;
+      background: var(--primary-lt);
+      box-shadow: 0 0 0 4px rgba(20,163,154,.12);
+    }
+    .audit-time {
+      color: var(--accent);
+      font-size: .72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .audit-message {
+      color: var(--text);
+      font-size: .84rem;
+      font-weight: 700;
+      line-height: 1.25;
+    }
+    .audit-detail {
+      color: var(--muted);
+      font-size: .74rem;
+      line-height: 1.35;
+      margin-top: .15rem;
+      word-break: break-word;
+    }
 
     .result-bar-wrap {
       height: 24px;
@@ -1066,6 +1106,19 @@
           </div>
         </div>
 
+        <!-- Auditoria -->
+        <div class="card mb-3">
+          <div class="card-header-primary d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-shield-check me-1"></i>Auditoria</span>
+            <span class="badge bg-light text-dark" id="audit-count">0</span>
+          </div>
+          <div class="card-body p-2" style="max-height:260px;overflow-y:auto">
+            <div id="audit-list" class="audit-list">
+              <p class="text-muted text-center small py-2">Nenhum evento registrado ainda.</p>
+            </div>
+          </div>
+        </div>
+
         <!-- Código de acesso rápido -->
         <div class="card">
           <div class="card-body text-center p-3">
@@ -1215,6 +1268,7 @@ const S = {
   results: {},
   voters: [],
   proxies: [],
+  auditLog: [],
   // participant
   voterId: null,
   participantCpf: null,
@@ -1248,6 +1302,7 @@ socket.on('state_sync', (data) => {
   if (data.assembly) S.assembly = data.assembly;
   if (data.units) S.units = data.units;
   if (data.pautas) S.pautas = data.pautas;
+  if (data.auditLog) S.auditLog = data.auditLog;
   refreshUI();
 });
 
@@ -1278,11 +1333,18 @@ socket.on('voter_registered', (voter) => {
   renderProjection();
 });
 
-socket.on('admin_state', ({ voters, proxies }) => {
+socket.on('admin_state', ({ voters, proxies, auditLog }) => {
   if (voters) S.voters = voters;
   if (proxies) S.proxies = proxies;
+  if (auditLog) S.auditLog = auditLog;
   renderVotersList();
   renderProxyList();
+  renderAuditLog();
+});
+
+socket.on('audit_update', (auditLog) => {
+  S.auditLog = auditLog || [];
+  renderAuditLog();
 });
 
 socket.on('proxy_uploaded', ({ unitId, unitNumber, fileName }) => {
@@ -1368,6 +1430,7 @@ function refreshUI() {
     renderAdminPautasList();
     renderVotersList();
     renderProxyList();
+    renderAuditLog();
     renderLaunchChecklist();
     updateQRCode();
   }
@@ -2058,6 +2121,31 @@ function renderProxyList() {
   }).join('');
 }
 
+function renderAuditLog() {
+  const el = document.getElementById('audit-list');
+  const countEl = document.getElementById('audit-count');
+  if (!el) return;
+  const events = Array.isArray(S.auditLog) ? S.auditLog : [];
+  if (countEl) countEl.textContent = events.length;
+  if (!events.length) {
+    el.innerHTML = '<p class="text-muted text-center small py-2">Nenhum evento registrado ainda.</p>';
+    return;
+  }
+  el.innerHTML = events.slice(0, 12).map(event => {
+    const details = Object.entries(event.details || {})
+      .map(([key, value]) => `${auditLabel(key)}: ${value}`)
+      .join(' · ');
+    return `<div class="audit-item">
+      <div class="audit-dot"></div>
+      <div>
+        <div class="audit-time">${esc(formatDateTime(event.createdAt))}</div>
+        <div class="audit-message">${esc(event.message || auditLabel(event.type))}</div>
+        ${details ? `<div class="audit-detail">${esc(details)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
 /* ══════════════════════════════════════════
    PROJECTION
 ══════════════════════════════════════════ */
@@ -2303,7 +2391,7 @@ function showClosed() {
 /* ══════════════════════════════════════════
    EXPORT PDF (ATA FORMAL)
 ══════════════════════════════════════════ */
-function exportPDF() {
+async function exportPDF() {
   try {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
@@ -2426,6 +2514,26 @@ function exportPDF() {
     );
     br(15);
 
+    if (S.auditLog.length) {
+      if (y > 235) { doc.addPage(); y = 20; }
+      addLine('RESUMO DE AUDITORIA DIGITAL', 12, 'bold', [53,68,18]);
+      br(2);
+      const auditRows = S.auditLog.slice(0, 8).map(event => [
+        formatDateTime(event.createdAt),
+        event.message || auditLabel(event.type),
+      ]);
+      doc.autoTable({
+        startY: y,
+        head: [['Data/Hora', 'Evento']],
+        body: auditRows,
+        margin: { left: marginL, right: marginR },
+        headStyles: { fillColor: [74,94,26], textColor: [255,255,255] },
+        styles: { fontSize: 8 },
+        theme: 'grid',
+      });
+      y = doc.lastAutoTable.finalY + 12;
+    }
+
     // Assinaturas
     const sigY = y;
     const colW = usableW / 3;
@@ -2439,6 +2547,11 @@ function exportPDF() {
       doc.text(role, x, sigY + 5, { align: 'center' });
     });
 
+    await recordAuditEvent('pdf_exported', 'Ata em PDF exportada', {
+      assemblyName: asm.name || '',
+      voters: S.voters.length,
+      pautas: S.pautas.length,
+    });
     const asmName = asm.name ? asm.name.replace(/[^a-zA-Z0-9]/g,'-') : 'assembleia';
     doc.save(`ata-${asmName}.pdf`);
     toast('PDF gerado com sucesso!', 'success');
@@ -2451,7 +2564,7 @@ function exportPDF() {
 /* ══════════════════════════════════════════
    EXPORT EXCEL
 ══════════════════════════════════════════ */
-function exportExcel() {
+async function exportExcel() {
   try {
     const wb = XLSX.utils.book_new();
     const asm = S.assembly || {};
@@ -2531,6 +2644,29 @@ function exportExcel() {
     ws3['!cols'] = [{ wch:10 },{ wch:30 },{ wch:30 },{ wch:20 },{ wch:12 }];
     XLSX.utils.book_append_sheet(wb, ws3, 'Procurações');
 
+    // ABA 4: Auditoria
+    const auditData = [['Data/Hora', 'Tipo', 'Evento', 'Detalhes']];
+    (S.auditLog || []).forEach(event => {
+      const details = Object.entries(event.details || {})
+        .map(([key, value]) => `${auditLabel(key)}: ${value}`)
+        .join(' | ');
+      auditData.push([
+        formatDateTime(event.createdAt),
+        auditLabel(event.type),
+        event.message || '',
+        details,
+      ]);
+    });
+    if (auditData.length === 1) auditData.push(['Nenhum evento registrado','','','']);
+    const ws4 = XLSX.utils.aoa_to_sheet(auditData);
+    ws4['!cols'] = [{ wch:18 },{ wch:24 },{ wch:55 },{ wch:70 }];
+    XLSX.utils.book_append_sheet(wb, ws4, 'Auditoria');
+
+    await recordAuditEvent('excel_exported', 'Relatório em Excel exportado', {
+      assemblyName: asm.name || '',
+      voters: S.voters.length,
+      pautas: S.pautas.length,
+    });
     const asmName = asm.name ? asm.name.replace(/[^a-zA-Z0-9]/g,'-') : 'assembleia';
     XLSX.writeFile(wb, `votacao-${asmName}.xlsx`);
     toast('Excel gerado com sucesso!', 'success');
@@ -2543,6 +2679,16 @@ function exportExcel() {
 /* ══════════════════════════════════════════
    API FETCH
 ══════════════════════════════════════════ */
+async function recordAuditEvent(type, message, details = {}) {
+  try {
+    const event = await apiFetch('/api/audit', 'POST', { type, message, details });
+    S.auditLog = [event, ...(S.auditLog || []).filter(e => e.id !== event.id)].slice(0, 300);
+    renderAuditLog();
+  } catch(e) {
+    console.warn('audit event not recorded:', e.message);
+  }
+}
+
 async function apiFetch(url, method='GET', body=null) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
   if (S.adminToken) opts.headers['x-admin-token'] = S.adminToken;
@@ -2623,6 +2769,77 @@ function formatDate(dateStr) {
     const d = new Date(dateStr + (dateStr.includes('T') ? '' : 'T12:00:00'));
     return d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric' });
   } catch(e) { return dateStr; }
+}
+
+function formatDateTime(dateStr) {
+  if (!dateStr) return '';
+  try {
+    return new Date(dateStr).toLocaleString('pt-BR', {
+      day:'2-digit', month:'2-digit', year:'2-digit',
+      hour:'2-digit', minute:'2-digit',
+    });
+  } catch(e) { return dateStr; }
+}
+
+function auditLabel(key) {
+  const labels = {
+    accessCode: 'Código',
+    added: 'Adicionadas',
+    assemblyName: 'Assembleia',
+    attemptsRemaining: 'Tentativas restantes',
+    city: 'Cidade',
+    condominiumName: 'Condomínio',
+    cpf: 'CPF',
+    date: 'Data',
+    fileName: 'Arquivo',
+    hasProxy: 'Procuração',
+    ip: 'IP',
+    location: 'Local',
+    ownerName: 'Proprietário',
+    pautaTitle: 'Pauta',
+    pautas: 'Pautas',
+    presentUnits: 'Presentes',
+    quorum: 'Quórum',
+    requiredUnits: 'Exigidas',
+    result: 'Resultado',
+    retryAfter: 'Tentar em',
+    state: 'UF',
+    timerMinutes: 'Tempo',
+    totalUnits: 'Unidades',
+    totalVotes: 'Votos',
+    unitNumber: 'Unidade',
+    units: 'Unidades',
+    vote: 'Voto',
+    voterName: 'Votante',
+    voters: 'Participantes',
+    voterType: 'Tipo',
+    admin_login_success: 'Login admin',
+    admin_login_failed: 'Falha login',
+    admin_login_locked: 'Login bloqueado',
+    admin_login_blocked: 'Bloqueio ativo',
+    assembly_created: 'Assembleia criada',
+    assembly_updated: 'Assembleia atualizada',
+    assembly_opened: 'Assembleia aberta',
+    assembly_force_opened: 'Abertura manual',
+    assembly_closed: 'Assembleia encerrada',
+    pauta_created: 'Pauta criada',
+    pauta_updated: 'Pauta atualizada',
+    pauta_deleted: 'Pauta removida',
+    pauta_opened: 'Votação aberta',
+    pauta_closed: 'Votação encerrada',
+    pauta_closed_auto: 'Fechamento automático',
+    pauta_closed_timer: 'Fechamento por tempo',
+    vote_registered: 'Voto registrado',
+    voter_registered: 'Participante entrou',
+    proxy_uploaded: 'Procuração anexada',
+    unit_created: 'Unidade criada',
+    unit_updated: 'Unidade atualizada',
+    unit_deleted: 'Unidade removida',
+    units_imported: 'Importação CSV',
+    pdf_exported: 'PDF exportado',
+    excel_exported: 'Excel exportado',
+  };
+  return labels[key] || key || '';
 }
 
 function quorumLabel(q) {
