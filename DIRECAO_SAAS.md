@@ -51,6 +51,27 @@ Ele combina:
 
 Na visao SaaS, cada cliente podera administrar seus condominios e assembleias dentro da mesma plataforma, com isolamento de dados, usuarios, permissoes e historico proprio.
 
+## Seguranca e Privacidade by Design
+
+Seguranca nao e um acabamento posterior do QuorumHub. Como o produto trata dados pessoais, documentos, CPFs, procuracoes, presencas, votos, registros de assembleia e futuramente gravacoes/transcricoes, toda evolucao deve ser pensada com seguranca e privacidade desde o desenho.
+
+Uma aplicacao visualmente excelente, mas insegura, nao serve para este projeto.
+
+Diretrizes obrigatorias:
+
+- Coletar apenas os dados necessarios para conduzir e registrar a assembleia.
+- Proteger dados pessoais por padrao, evitando exposicao desnecessaria de CPF, documentos e arquivos.
+- Mascarar ou reduzir dados sensiveis em telas, logs e auditorias sempre que o dado completo nao for indispensavel.
+- Garantir isolamento entre condominios, usuarios e assembleias antes de qualquer uso em producao.
+- Exigir autenticacao real, sessoes seguras e papeis/permissoes antes de tratar o produto como SaaS comercial.
+- Registrar eventos relevantes sem transformar logs em vazamento de dados pessoais.
+- Tratar procuracoes, atas, relatorios, gravacoes e transcricoes como informacoes sensiveis.
+- Planejar backups, restauracao, controle de acesso e criptografia antes de ambiente web definitivo.
+- Nunca integrar Daily/OpenAI ou qualquer servico externo enviando dados sensiveis sem controle claro de finalidade, custo, retencao e acesso.
+- Considerar LGPD, minimizacao de dados, necessidade, finalidade, transparencia e seguranca como premissas do produto.
+
+Decisao de projeto: quando houver conflito entre velocidade e protecao de dados pessoais, a protecao prevalece. Podemos acelerar desenvolvimento, mas nao normalizar atalhos inseguros.
+
 ## Finalidade
 
 A finalidade do produto e reduzir falhas, discussoes e retrabalho em assembleias condominiais.
@@ -312,6 +333,7 @@ Adicionar recursos premium:
 - Isolar dados por condominio.
 - Normalizar o PostgreSQL.
 - Criar logs de auditoria.
+- Definir baseline de seguranca e privacidade by design.
 
 ### Fase 2 - Operacao em VPS
 
@@ -374,6 +396,7 @@ Daily/OpenAI devem ser precificados dentro do plano premium ou cobrados como uso
 ## Principios do Projeto
 
 - Nao complicar antes de validar.
+- Segurança e privacidade devem nascer com cada funcionalidade, nao depois dela.
 - Nao abrir mao de seguranca juridica e rastreabilidade.
 - Cada voto deve pertencer a uma unidade.
 - Uma unidade nao pode votar duas vezes na mesma pauta.

@@ -299,13 +299,42 @@ const S = {
 
 ---
 
-## 10. Segurança Implementada
+## 10. Segurança e Privacidade
+
+### Segurança by Design
+
+O QuorumHub trata dados pessoais e documentos sensiveis: CPF, nomes de proprietarios e representantes, procuracoes, presencas, votos, atas e futuramente gravacoes/transcricoes. Por isso, seguranca e privacidade sao requisitos de desenho, nao uma etapa final.
+
+Diretrizes tecnicas do projeto:
+
+- Minimizar coleta e exibicao de dados pessoais.
+- Evitar CPF completo em telas, logs, auditoria e relatorios quando mascara ou contexto parcial bastarem.
+- Proteger todas as rotas administrativas com autenticacao e sessao.
+- Isolar dados por condominio antes de qualquer uso SaaS real.
+- Tratar procuracoes, atas, relatorios, gravacoes e transcricoes como dados sensiveis.
+- Registrar auditoria sem vazar informacoes pessoais desnecessarias.
+- Validar permissoes no servidor, nunca apenas no frontend.
+- Antes de ambiente web definitivo, revisar HTTPS, backup, restore, secrets, logs e controle de acesso.
+- Antes de Daily/OpenAI, validar finalidade, retencao, custo e quais dados serao enviados para terceiros.
+
+### Segurança Implementada
 
 - **Anti-duplicidade de voto:** servidor verifica `votes[pautaId][unitId]` e retorna 409 se já existe.
 - **Validação de CPF server-side:** participante não se autodeclara. O administrador pré-cadastra o CPF do votante autorizado por unidade. O servidor cruza na entrada e em cada voto.
 - **Token de sessão admin:** header `x-admin-token` em todas as rotas protegidas. Sessão expira em 8h.
 - **Rate limiting no login admin:** 5 tentativas → lock de 15 minutos.
 - **Procuração obrigatória:** unidades com `hasProxy: true` devem ter arquivo enviado via `/api/proxy/:unitId`.
+- **Auditoria operacional:** eventos críticos são registrados em `auditLog`, exibidos ao admin e exportados em relatórios.
+
+### Segurança Ainda Pendente
+
+- Autenticacao real por usuario, com senha individual e politica de recuperacao.
+- Papeis e permissoes por perfil: dono da conta, sindico, operador/condutor e participante.
+- Isolamento real multi-tenant por conta/condominio.
+- Modelo PostgreSQL normalizado com controles de acesso por entidade.
+- Politica de retencao e exclusao de dados pessoais.
+- Criptografia/seguranca de arquivos sensiveis em ambiente web.
+- Revisao LGPD antes de piloto real com dados de terceiros.
 
 ---
 
@@ -328,7 +357,7 @@ const S = {
 - [x] QR Code de acesso para participantes
 - [x] Tela de votação para participantes com timer
 - [x] Exportação de ata em PDF (jsPDF com linguagem jurídica)
-- [x] Exportação de resultados em Excel (3 abas: Resumo, Votos, Procurações)
+- [x] Exportação de resultados em Excel (4 abas: Resumo, Votos, Procurações, Auditoria)
 - [x] Persistência em JSON local (`data.json`)
 - [x] Persistência em PostgreSQL (para produção no Railway)
 - [x] Base SaaS inicial com cadastro/metadados de condomínio ativo

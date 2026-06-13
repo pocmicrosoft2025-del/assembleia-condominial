@@ -999,6 +999,10 @@
         {
           "date": "2026-06-10",
           "text": "Iniciada base SaaS: cadastro/metadados de condominio ativo, tela administrativa de condominio e vinculo inicial de assembleia, unidades e pautas ao condominio atual."
+        },
+        {
+          "date": "2026-06-13",
+          "text": "Seguranca e privacidade by design incorporadas como principio do projeto, com documento SECURITY.md e baseline antes de piloto real."
         }
       ],
       "deliverables": [
@@ -1037,6 +1041,15 @@
           "owner": "Produto/Backend",
           "dependsOn": "Autenticacao",
           "notes": "Daily/OpenAI exigira papel de condutor."
+        },
+        {
+          "id": "f1-d5",
+          "title": "Seguranca e privacidade by design",
+          "description": "Definir baseline de protecao de dados pessoais, LGPD, exposicao minima, controle de acesso e criterios antes de piloto real.",
+          "status": "em-andamento",
+          "owner": "Produto/Backend",
+          "dependsOn": "Modelo SaaS e autenticacao real",
+          "notes": "SECURITY.md criado. Ainda falta implementar login individual, papeis/permissoes, isolamento real por condominio, politica de retencao e revisao LGPD antes de piloto com dados reais."
         }
       ]
     },

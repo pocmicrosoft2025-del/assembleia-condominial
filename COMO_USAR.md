@@ -52,6 +52,14 @@ O terminal mostrará algo como:
 
 ## Fluxo da Assembleia
 
+### Cuidados com dados pessoais
+
+- Cadastre apenas os dados necessários para conduzir a assembleia.
+- Não compartilhe planilhas, PDFs, procurações ou códigos de acesso em grupos públicos.
+- Confirme se o CPF informado pertence ao votante autorizado antes da assembleia.
+- Trate procurações e relatórios exportados como documentos sensíveis.
+- Ao demonstrar o sistema, prefira dados fictícios ou massa demo.
+
 ### Administrador:
 
 1. **Condomínio** — Revise ou preencha os dados do condomínio ativo
