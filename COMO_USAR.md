@@ -59,9 +59,11 @@ O terminal mostrará algo como:
 3. **Unidades** — Cadastre cada unidade com número, proprietário e CPF
    _(ou importe um CSV com colunas: `numero,proprietario,cpf`)_
 4. **Pautas** — Adicione cada item da ordem do dia
-5. **Iniciar** — Clique em "Abrir Assembleia" e compartilhe o código de acesso
+5. **Iniciar** — Clique em "Abrir Assembleia" e compartilhe o código, o link ou o convite pronto
 6. **Painel ao vivo** — Abra/feche a votação de cada pauta individualmente
 7. Ao final, exporte os resultados em **PDF** e/ou **Excel**
+
+Na tela **Iniciar**, use os botões **Copiar código**, **Copiar link** ou **Copiar convite** para enviar o acesso aos participantes por WhatsApp, e-mail ou outro canal combinado. O mesmo atalho de link/convite também aparece no painel ao vivo.
 
 ### Participantes:
 

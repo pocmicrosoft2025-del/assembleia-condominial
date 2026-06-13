@@ -503,6 +503,36 @@
       border: 1px solid var(--border);
       box-shadow: var(--shadow-sm);
     }
+    .share-tools {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: .55rem;
+    }
+    .share-tools .btn {
+      min-height: 40px;
+      font-weight: 700;
+      white-space: normal;
+    }
+    .share-preview {
+      text-align: left;
+      border: 1px solid rgba(11,31,42,.1);
+      background: linear-gradient(180deg, #ffffff, var(--surface-2));
+      border-left: 4px solid var(--accent);
+      border-radius: 8px;
+      padding: .75rem;
+      color: var(--muted);
+      word-break: break-word;
+    }
+    .dash-share-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: .45rem;
+    }
+    .dash-share-actions .btn {
+      font-size: .8rem;
+      font-weight: 700;
+      min-height: 34px;
+    }
 
     .result-bar-wrap {
       height: 24px;
@@ -629,6 +659,8 @@
       .landing-card { padding: 1.4rem; margin-left: 0; }
       .landing-title { font-size: 2.35rem; }
       .btn-landing { max-width: none; }
+      .share-tools { grid-template-columns: 1fr; }
+      .dash-share-actions { grid-template-columns: 1fr; }
       .btn-vote-sim, .btn-vote-nao, .btn-vote-abs { width: 100%; }
     }
   </style>
@@ -947,14 +979,29 @@
           <div class="col-md-6 text-center">
             <div class="section-header">Código de Acesso</div>
             <div id="access-code-display" class="access-code-box mb-3">------</div>
-            <div class="d-flex justify-content-center gap-2 mb-3">
+            <div class="d-flex justify-content-center gap-2 mb-3 flex-wrap">
               <button class="btn btn-outline-secondary btn-sm" onclick="regenerateCode()">
                 <i class="bi bi-arrow-clockwise me-1"></i>Regenerar
+              </button>
+              <button class="btn btn-outline-secondary btn-sm" onclick="copyAccessCode()">
+                <i class="bi bi-clipboard me-1"></i>Copiar código
               </button>
             </div>
             <div class="section-header mt-3">QR Code</div>
             <div id="qr-code" class="d-flex justify-content-center my-2"></div>
-            <div class="text-muted small mt-1" id="qr-link-text"></div>
+            <div class="text-muted small mt-1 mb-3" id="qr-link-text"></div>
+            <div class="share-tools mb-3">
+              <button class="btn btn-primary-custom btn-sm" onclick="copyParticipantLink()">
+                <i class="bi bi-link-45deg me-1"></i>Copiar link
+              </button>
+              <button class="btn btn-accent btn-sm" onclick="copyInviteText()">
+                <i class="bi bi-send me-1"></i>Copiar convite
+              </button>
+              <button class="btn btn-outline-secondary btn-sm" onclick="showView('view-participant-join')">
+                <i class="bi bi-person-check me-1"></i>Testar entrada
+              </button>
+            </div>
+            <div class="share-preview small" id="invite-preview"></div>
           </div>
         </div>
       </div>
@@ -1024,6 +1071,14 @@
           <div class="card-body text-center p-3">
             <div class="text-muted small mb-1">Código de Acesso</div>
             <div id="dash-access-code" class="fw-bold" style="font-size:1.4rem;color:var(--primary);letter-spacing:0.1rem;font-family:monospace">---</div>
+            <div class="dash-share-actions mt-3">
+              <button class="btn btn-outline-secondary btn-sm" onclick="copyParticipantLink()">
+                <i class="bi bi-link-45deg me-1"></i>Link
+              </button>
+              <button class="btn btn-accent btn-sm" onclick="copyInviteText()">
+                <i class="bi bi-send me-1"></i>Convite
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1303,6 +1358,7 @@ function refreshUI() {
   const code = S.assembly ? S.assembly.accessCode : '------';
   setText('access-code-display', code || '------');
   setText('dash-access-code', code || '---');
+  setText('invite-preview', buildInviteText());
 
   if (S.role === 'admin') {
     fillCondominiumForm();
@@ -1752,8 +1808,9 @@ function updateQRCode() {
   if (!qrEl) return;
   const code = S.assembly ? S.assembly.accessCode : null;
   if (!code) return;
-  const url = window.location.origin + '?code=' + code;
+  const url = participantLink();
   setText('qr-link-text', url);
+  setText('invite-preview', buildInviteText());
   qrEl.innerHTML = '';
   try {
     new QRCode(qrEl, {
@@ -1764,6 +1821,57 @@ function updateQRCode() {
       colorLight: '#ffffff'
     });
   } catch(e) { qrEl.innerHTML = '<small class="text-muted">QR indisponível</small>'; }
+}
+
+function participantLink() {
+  const code = S.assembly ? S.assembly.accessCode : '';
+  const base = `${window.location.origin}${window.location.pathname}`;
+  return code ? `${base}?code=${encodeURIComponent(code)}` : base;
+}
+
+function buildInviteText() {
+  const assemblyName = S.assembly && S.assembly.name ? S.assembly.name : 'assembleia';
+  const date = S.assembly && S.assembly.date ? ` em ${formatDate(S.assembly.date)}` : '';
+  const code = S.assembly && S.assembly.accessCode ? S.assembly.accessCode : '------';
+  return `Olá! Você foi convidado(a) para participar da ${assemblyName}${date} pelo QuorumHub. Acesse ${participantLink()} e informe seu CPF autorizado. Código de acesso: ${code}`;
+}
+
+async function copyTextToClipboard(text, successMessage) {
+  if (!text) {
+    toast('Nada para copiar no momento', 'warning');
+    return;
+  }
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const input = document.createElement('textarea');
+      input.value = text;
+      input.setAttribute('readonly', '');
+      input.style.position = 'fixed';
+      input.style.opacity = '0';
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+    }
+    toast(successMessage, 'success');
+  } catch(e) {
+    toast('Não foi possível copiar automaticamente', 'danger');
+  }
+}
+
+function copyAccessCode() {
+  const code = S.assembly && S.assembly.accessCode ? S.assembly.accessCode : '';
+  copyTextToClipboard(code, 'Código copiado');
+}
+
+function copyParticipantLink() {
+  copyTextToClipboard(participantLink(), 'Link do participante copiado');
+}
+
+function copyInviteText() {
+  copyTextToClipboard(buildInviteText(), 'Convite copiado');
 }
 
 /* ══════════════════════════════════════════
