@@ -233,11 +233,13 @@ Por isso, Daily/OpenAI fazem parte da visao final do produto. Eles nao serao tra
 
 Mesmo assim, a implementacao sera feita depois da fundacao SaaS estar pronta, para evitar retrabalho.
 
-## Estrategia de Infraestrutura Inicial
+## Estrategia de Infraestrutura
 
-Para a primeira fase comercial, a estrategia preferida e comecar simples e com custo controlado.
+Para a primeira fase de desenvolvimento e demonstracao, a estrategia preferida e continuar local-first pelo maior tempo pratico possivel. A VPS deve ser postergada ate existir uma necessidade concreta de acesso externo estavel, piloto remoto ou validacao com clientes fora da maquina local.
 
-### Ambiente Inicial Recomendado
+Essa decisao reduz custo recorrente antes da hora e protege o caixa do projeto enquanto ainda estamos lapidando produto, fluxo e proposta comercial.
+
+### Ambiente Web Recomendado Quando Chegar a Hora
 
 - 1 VPS Linux.
 - App Node.js.
@@ -247,7 +249,7 @@ Para a primeira fase comercial, a estrategia preferida e comecar simples e com c
 - Backup automatico diario.
 - Docker ou Docker Compose para facilitar instalacao e manutencao.
 
-Essa abordagem reduz custo, simplifica operacao e permite validar clientes antes de migrar para servicos gerenciados.
+Essa abordagem deve ser usada quando a VPS fizer sentido. Nesse momento, ela reduz custo em comparacao a servicos gerenciados, simplifica operacao inicial e permite validar clientes antes de migrar para uma arquitetura mais distribuida.
 
 ### Evolucao Futura
 
@@ -264,6 +266,7 @@ Quando houver clientes e receita recorrente, poderemos migrar gradualmente:
 ### Curto Prazo
 
 - Manter o app funcional localmente.
+- Postergar contratacao/configuracao de VPS ate o limite pratico do desenvolvimento local.
 - Manter fallback com `data.json` para desenvolvimento.
 - Usar PostgreSQL quando `DATABASE_URL` existir.
 - Preparar o banco para evoluir de `JSONB` para tabelas normalizadas.
@@ -311,6 +314,8 @@ Adicionar recursos premium:
 - Criar logs de auditoria.
 
 ### Fase 2 - Operacao em VPS
+
+Esta fase fica deliberadamente postergada ate o produto local exigir demonstracao externa estavel, piloto remoto ou ambiente web de validacao.
 
 - Criar Docker Compose.
 - Rodar app + PostgreSQL.

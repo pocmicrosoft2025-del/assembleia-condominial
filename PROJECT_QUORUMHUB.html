@@ -898,7 +898,7 @@
     "name": "QuorumHub",
     "tagline": "Do quorum a ata, tudo em um so lugar.",
     "owner": "POC Microsoft / Projeto pessoal",
-    "mode": "SaaS em VPS primeiro, Daily/OpenAI como diferencial premium",
+    "mode": "SaaS local-first ate o limite pratico; VPS somente quando necessaria; Daily/OpenAI como diferencial premium",
     "workspacePath": "D:\\PROJETOS_PESSOAIS\\PROJETO_QUORUM_HUB",
     "startedAt": "2026-06-07",
     "lastReview": "2026-06-13",
@@ -1048,10 +1048,15 @@
       "status": "nao-iniciado",
       "target": "3 semanas",
       "buffer": "2 semanas",
-      "window": "Apos fundacao SaaS inicial",
-      "dependencies": "App minimamente multi-tenant e PostgreSQL estavel.",
-      "observations": "A VPS e a estrategia inicial preferida para custo previsivel.",
-      "notes": [],
+      "window": "Postergar ate o produto local nao atender mais ao desenvolvimento/piloto",
+      "dependencies": "Produto demonstravel, necessidade real de acesso externo e PostgreSQL estavel.",
+      "observations": "Decisao de 2026-06-13: evitar custo de VPS antes da hora. Manter desenvolvimento local enquanto for suficiente; preparar VPS apenas quando o piloto ou a demonstracao externa exigirem.",
+      "notes": [
+        {
+          "date": "2026-06-13",
+          "text": "VPS postergada deliberadamente para evitar custo recorrente prematuro. A prioridade imediata e amadurecer o MVP local e so ativar infraestrutura web quando houver necessidade concreta."
+        }
+      ],
       "deliverables": [
         {
           "id": "f2-d1",
@@ -1100,7 +1105,7 @@
       "target": "5 semanas",
       "buffer": "2 semanas",
       "window": "Antes do piloto pago",
-      "dependencies": "Base SaaS, VPS, backup e fluxo de assembleia estavel.",
+      "dependencies": "Base SaaS, fluxo de assembleia estavel e ambiente local confiavel. VPS entra apenas quando o piloto exigir acesso externo controlado.",
       "observations": "Mesmo sem Daily/OpenAI, esta fase deve estar pronta para testes internos e demonstracao.",
       "notes": [
         {
