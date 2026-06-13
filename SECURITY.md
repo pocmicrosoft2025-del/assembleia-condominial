@@ -94,15 +94,18 @@ Ja existe:
 
 - Validacao server-side de CPF autorizado.
 - Bloqueio de voto duplicado por unidade/pauta.
-- Token de sessao admin.
+- Login administrativo por usuario, e-mail e senha com hash PBKDF2 + salt.
+- Token de sessao admin vinculado ao usuario logado.
+- Base inicial de papeis: `owner`, `admin`, `operator` e `participant`.
 - Limite de tentativas de login admin.
 - Procuracao obrigatoria para representante.
 - Auditoria operacional basica.
 
 Ainda falta antes de piloto real:
 
-- Login individual por usuario.
-- Papeis e permissoes.
+- Tela de gestao de usuarios.
+- Recuperacao/troca de senha.
+- Permissoes granulares por perfil.
 - Isolamento real multi-tenant.
 - Modelo de dados normalizado.
 - Politica de retencao de dados.

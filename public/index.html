@@ -736,13 +736,18 @@
       <div class="text-center mb-4">
         <div class="landing-logo mx-auto" style="width:52px;height:52px;font-size:1.55rem"><i class="bi bi-shield-lock"></i></div>
         <h4 class="fw-bold" style="color:var(--primary)">Acesso Administrativo</h4>
-        <p class="text-muted small">Insira a senha para continuar</p>
+        <p class="text-muted small">Entre com usuário e senha para continuar</p>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">E-mail</label>
+        <input type="email" id="admin-email" class="form-control" value="admin@quorumhub.local" placeholder="admin@quorumhub.local"
+          autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('admin-password').focus()"/>
       </div>
       <div class="mb-3">
         <label class="form-label fw-semibold">Senha</label>
         <div class="input-group">
           <input type="password" id="admin-password" class="form-control" placeholder="senha admin"
-            onkeydown="if(event.key==='Enter')adminLogin()"/>
+            autocomplete="current-password" onkeydown="if(event.key==='Enter')adminLogin()"/>
           <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('admin-password','admin-password-eye')" aria-label="Mostrar ou ocultar senha">
             <i class="bi bi-eye" id="admin-password-eye"></i>
           </button>
@@ -1059,6 +1064,7 @@
       <div class="topbar-brand" id="dash-assembly-name">Assembleia</div>
       <div class="topbar-sub" id="dash-assembly-info"></div>
       <div class="topbar-sub" id="dash-condominium-info"></div>
+      <div class="topbar-sub" id="dash-current-user"></div>
     </div>
     <div class="d-flex gap-2 flex-wrap">
       <button class="btn btn-sm btn-outline-light" onclick="showView('view-admin-setup')"><i class="bi bi-gear me-1"></i>Configurações</button>
@@ -1259,6 +1265,7 @@
 const S = {
   role: null,
   adminToken: null,
+  currentUser: null,
   condominium: null,
   condominiums: [],
   activeCondominiumId: null,
@@ -1333,10 +1340,12 @@ socket.on('voter_registered', (voter) => {
   renderProjection();
 });
 
-socket.on('admin_state', ({ voters, proxies, auditLog }) => {
+socket.on('admin_state', ({ currentUser, voters, proxies, auditLog }) => {
+  if (currentUser) S.currentUser = currentUser;
   if (voters) S.voters = voters;
   if (proxies) S.proxies = proxies;
   if (auditLog) S.auditLog = auditLog;
+  refreshUI();
   renderVotersList();
   renderProxyList();
   renderAuditLog();
@@ -1395,6 +1404,7 @@ function switchTab(btn, tabId) {
 function logout() {
   S.role = null;
   S.adminToken = null;
+  S.currentUser = null;
   showView('view-landing');
 }
 
@@ -1416,6 +1426,7 @@ function refreshUI() {
   setText('dash-assembly-name', name);
   setText('dash-assembly-info', info);
   setText('voting-assembly-name', name);
+  setText('dash-current-user', S.currentUser ? `${roleLabel(S.currentUser.role)} · ${S.currentUser.email}` : '');
 
   const code = S.assembly ? S.assembly.accessCode : '------';
   setText('access-code-display', code || '------');
@@ -1460,12 +1471,15 @@ function fillAssemblyForm() {
    ADMIN LOGIN
 ══════════════════════════════════════════ */
 async function adminLogin() {
+  const email = getVal('admin-email').trim();
   const password = getVal('admin-password');
+  if (!email) { toast('Informe o e-mail do usuário', 'warning'); return; }
   if (!password) { toast('Insira a senha', 'warning'); return; }
   try {
-    const data = await apiFetch('/api/admin/login', 'POST', { password });
+    const data = await apiFetch('/api/admin/login', 'POST', { email, password });
     if (data.success) {
       S.adminToken = data.token;
+      S.currentUser = data.user || null;
       S.role = 'admin';
       socket.emit('admin_connect', { token: S.adminToken });
       await loadAdminData();
@@ -1479,11 +1493,14 @@ async function adminLogin() {
 
 async function loadDemoAndEnter() {
   try {
+    const email = getVal('admin-email').trim();
     const password = getVal('admin-password');
+    if (!email) { toast('Informe o e-mail do usuário', 'warning'); return; }
     if (!password) { toast('Informe a senha do administrador para carregar o demo', 'warning'); return; }
-    const r = await apiFetch('/api/admin/login', 'POST', { password });
+    const r = await apiFetch('/api/admin/login', 'POST', { email, password });
     if (r.success) {
       S.adminToken = r.token;
+      S.currentUser = r.user || null;
       S.role = 'admin';
       await apiFetch('/api/admin/seed', 'POST', {});
       socket.emit('admin_connect', { token: S.adminToken });
@@ -1496,12 +1513,14 @@ async function loadDemoAndEnter() {
 
 async function loadAdminData() {
   try {
-    const [condominiums, units, pautas, assembly] = await Promise.all([
+    const [me, condominiums, units, pautas, assembly] = await Promise.all([
+      apiFetch('/api/admin/me'),
       apiFetch('/api/condominiums'),
       apiFetch('/api/units'),
       apiFetch('/api/pautas'),
       apiFetch('/api/assembly').catch(() => null),
     ]);
+    if (me?.user) S.currentUser = me.user;
     if (condominiums) {
       S.condominiums = condominiums.condominiums || [];
       S.activeCondominiumId = condominiums.activeCondominiumId || null;
@@ -2791,6 +2810,7 @@ function auditLabel(key) {
     condominiumName: 'Condomínio',
     cpf: 'CPF',
     date: 'Data',
+    email: 'E-mail',
     fileName: 'Arquivo',
     hasProxy: 'Procuração',
     ip: 'IP',
@@ -2802,6 +2822,7 @@ function auditLabel(key) {
     quorum: 'Quórum',
     requiredUnits: 'Exigidas',
     result: 'Resultado',
+    role: 'Papel',
     retryAfter: 'Tentar em',
     state: 'UF',
     timerMinutes: 'Tempo',
@@ -2840,6 +2861,16 @@ function auditLabel(key) {
     excel_exported: 'Excel exportado',
   };
   return labels[key] || key || '';
+}
+
+function roleLabel(role) {
+  const labels = {
+    owner: 'Dono da conta',
+    admin: 'Síndico/Admin',
+    operator: 'Condutor',
+    participant: 'Participante',
+  };
+  return labels[role] || role || 'Usuário';
 }
 
 function quorumLabel(q) {

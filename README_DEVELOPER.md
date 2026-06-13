@@ -321,15 +321,18 @@ Diretrizes tecnicas do projeto:
 
 - **Anti-duplicidade de voto:** servidor verifica `votes[pautaId][unitId]` e retorna 409 se já existe.
 - **Validação de CPF server-side:** participante não se autodeclara. O administrador pré-cadastra o CPF do votante autorizado por unidade. O servidor cruza na entrada e em cada voto.
-- **Token de sessão admin:** header `x-admin-token` em todas as rotas protegidas. Sessão expira em 8h.
-- **Rate limiting no login admin:** 5 tentativas → lock de 15 minutos.
+- **Usuário administrativo real:** login por e-mail e senha, com hash PBKDF2 + salt no estado persistido.
+- **Papéis mínimos:** `owner`, `admin`, `operator` e `participant` já existem como base de modelo; rotas administrativas aceitam os papéis administrativos.
+- **Token de sessão admin:** header `x-admin-token` em todas as rotas protegidas. Sessão expira em 8h e referencia o usuário logado.
+- **Rate limiting no login admin:** 5 tentativas por IP/e-mail → lock de 15 minutos.
 - **Procuração obrigatória:** unidades com `hasProxy: true` devem ter arquivo enviado via `/api/proxy/:unitId`.
 - **Auditoria operacional:** eventos críticos são registrados em `auditLog`, exibidos ao admin e exportados em relatórios.
 
 ### Segurança Ainda Pendente
 
-- Autenticacao real por usuario, com senha individual e politica de recuperacao.
-- Papeis e permissoes por perfil: dono da conta, sindico, operador/condutor e participante.
+- Tela de gestão de usuários.
+- Recuperação/troca de senha.
+- Permissões granulares por perfil e ação.
 - Isolamento real multi-tenant por conta/condominio.
 - Modelo PostgreSQL normalizado com controles de acesso por entidade.
 - Politica de retencao e exclusao de dados pessoais.
@@ -361,6 +364,8 @@ Diretrizes tecnicas do projeto:
 - [x] Persistência em JSON local (`data.json`)
 - [x] Persistência em PostgreSQL (para produção no Railway)
 - [x] Base SaaS inicial com cadastro/metadados de condomínio ativo
+- [x] Login administrativo por usuário com senha hasheada
+- [x] Base inicial de papéis (`owner`, `admin`, `operator`, `participant`)
 - [x] Dados demo (seed) para testes
 - [x] Deploy no Railway com auto-deploy via GitHub
 

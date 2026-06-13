@@ -13,6 +13,7 @@ const server = http.createServer(app);
 const io     = new Server(server, { maxHttpBufferSize: 10 * 1024 * 1024 });
 
 const PORT           = process.env.PORT || 3000;
+const ADMIN_EMAIL    = (process.env.ADMIN_EMAIL || 'admin@quorumhub.local').toLowerCase();
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const DATA_FILE      = path.join(__dirname, 'data.json');
 const DATABASE_URL   = process.env.DATABASE_URL || '';
@@ -21,6 +22,8 @@ const ADMIN_LOGIN_MAX_ATTEMPTS = 5;
 const ADMIN_LOGIN_LOCK_MS = 15 * 60 * 1000;
 const STATE_ROW_KEY = 'main';
 const DEFAULT_CONDOMINIUM_NAME = 'Condomínio Principal';
+const PASSWORD_ITERATIONS = 120000;
+const ADMIN_ROLES = new Set(['owner', 'admin', 'operator']);
 
 // ─── Estado em memória ────────────────────────────────────────────────────────
 // units[]:  { id, number, ownerName, ownerCpf,
@@ -43,6 +46,7 @@ let state = {
   votes       : {},
   proxies     : {},
   auditLog    : [],
+  users       : [],
   adminSockets: new Set(),
   pautaTimers : {},
   adminSessions: new Map(),
@@ -82,6 +86,7 @@ function applyPersistedState(data) {
   state.votes = state.votes || {};
   state.proxies = state.proxies || {};
   state.auditLog = Array.isArray(state.auditLog) ? state.auditLog : [];
+  state.users = Array.isArray(state.users) ? state.users : [];
   ensureSaasState();
 }
 
@@ -126,6 +131,8 @@ function ensureSaasState() {
   state.pautas.forEach(pauta => {
     if (!pauta.condominiumId) pauta.condominiumId = state.activeCondominiumId;
   });
+
+  ensureUserState();
 }
 
 function getActiveCondominium() {
@@ -242,10 +249,77 @@ app.use(express.static(path.join(__dirname, 'public')));
 function generateCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
-function createAdminToken() {
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+function createPasswordCredential(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync(String(password || ''), salt, PASSWORD_ITERATIONS, 64, 'sha512').toString('hex');
+  return { passwordHash: hash, passwordSalt: salt, passwordIterations: PASSWORD_ITERATIONS };
+}
+function verifyPassword(password, user) {
+  if (!user?.passwordHash || !user?.passwordSalt) return false;
+  const iterations = user.passwordIterations || PASSWORD_ITERATIONS;
+  const actual = crypto.pbkdf2Sync(String(password || ''), user.passwordSalt, iterations, 64, 'sha512');
+  const expected = Buffer.from(user.passwordHash, 'hex');
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+}
+function publicUser(user) {
+  if (!user) return null;
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    status: user.status,
+    condominiumIds: user.condominiumIds || [],
+  };
+}
+function normalizeUser(user) {
+  const now = new Date().toISOString();
+  return {
+    id: user?.id || uuidv4(),
+    name: String(user?.name || 'Administrador QuorumHub').trim(),
+    email: normalizeEmail(user?.email || ADMIN_EMAIL),
+    role: user?.role || 'owner',
+    status: user?.status || 'active',
+    condominiumIds: Array.isArray(user?.condominiumIds) && user.condominiumIds.length
+      ? user.condominiumIds
+      : [state.activeCondominiumId].filter(Boolean),
+    passwordHash: user?.passwordHash || '',
+    passwordSalt: user?.passwordSalt || '',
+    passwordIterations: user?.passwordIterations || PASSWORD_ITERATIONS,
+    createdAt: user?.createdAt || now,
+    updatedAt: user?.updatedAt || now,
+  };
+}
+function ensureUserState() {
+  state.users = Array.isArray(state.users) ? state.users.map(normalizeUser) : [];
+  if (!state.users.length) {
+    state.users.push(normalizeUser({
+      name: 'Administrador QuorumHub',
+      email: ADMIN_EMAIL,
+      role: 'owner',
+      status: 'active',
+      condominiumIds: [state.activeCondominiumId].filter(Boolean),
+      ...createPasswordCredential(ADMIN_PASSWORD),
+    }));
+  }
+}
+function findUserByEmail(email) {
+  const normalized = normalizeEmail(email);
+  return (state.users || []).find(user => normalizeEmail(user.email) === normalized);
+}
+function canAccessAdmin(user) {
+  return !!user && user.status === 'active' && ADMIN_ROLES.has(user.role);
+}
+function createAdminToken(user) {
   const token = crypto.randomBytes(32).toString('hex');
   state.adminSessions.set(token, {
     expiresAt: Date.now() + ADMIN_SESSION_MS,
+    userId: user.id,
+    email: user.email,
+    role: user.role,
     condominiumId: state.activeCondominiumId,
   });
   return token;
@@ -260,11 +334,22 @@ function getAdminSession(token) {
   }
   const nextSession = {
     expiresAt: Date.now() + ADMIN_SESSION_MS,
+    userId: typeof session === 'number' ? null : session.userId,
+    email: typeof session === 'number' ? null : session.email,
+    role: typeof session === 'number' ? 'owner' : session.role,
     condominiumId: typeof session === 'number'
       ? state.activeCondominiumId
       : (session.condominiumId || state.activeCondominiumId),
   };
+  const user = nextSession.userId
+    ? state.users.find(u => u.id === nextSession.userId)
+    : findUserByEmail(nextSession.email || ADMIN_EMAIL);
+  if (!canAccessAdmin(user)) {
+    state.adminSessions.delete(token);
+    return false;
+  }
   state.adminSessions.set(token, nextSession);
+  nextSession.user = user;
   return nextSession;
 }
 function isAdmin(req) {
@@ -272,6 +357,7 @@ function isAdmin(req) {
   const session = getAdminSession(token);
   if (!session) return false;
   req.adminSession = session;
+  req.adminUser = session.user;
   return true;
 }
 function normCpf(cpf) {
@@ -447,14 +533,18 @@ function broadcastState()   {
 
 // ─── Admin: login ─────────────────────────────────────────────────────────────
 app.post('/api/admin/login', (req, res) => {
+  ensureSaasState();
   const { password } = req.body;
+  const email = normalizeEmail(req.body.email || ADMIN_EMAIL);
   const clientKey = getClientKey(req);
-  const attempt = getLoginAttempt(clientKey);
+  const attemptKey = `${clientKey}:${email}`;
+  const attempt = getLoginAttempt(attemptKey);
 
   if (attempt.lockedUntil && attempt.lockedUntil > Date.now()) {
     const remainingMs = attempt.lockedUntil - Date.now();
     addAuditEvent('admin_login_blocked', 'Tentativa de login bloqueada temporariamente', {
       ip: clientKey,
+      email,
       retryAfter: formatRemainingLock(remainingMs),
     });
     saveState();
@@ -465,17 +555,25 @@ app.post('/api/admin/login', (req, res) => {
     });
   }
 
-  if (password === ADMIN_PASSWORD) {
-    state.adminLoginAttempts.delete(clientKey);
-    addAuditEvent('admin_login_success', 'Administrador acessou o sistema', { ip: clientKey });
+  const user = findUserByEmail(email);
+  const loginOk = canAccessAdmin(user) && verifyPassword(password, user);
+
+  if (loginOk) {
+    state.adminLoginAttempts.delete(attemptKey);
+    addAuditEvent('admin_login_success', `Usuário administrativo acessou o sistema: ${user.email}`, {
+      ip: clientKey,
+      email: user.email,
+      role: user.role,
+    });
     saveState();
-    res.json({ success: true, token: createAdminToken() });
+    res.json({ success: true, token: createAdminToken(user), user: publicUser(user) });
   } else {
     const nextCount = attempt.count + 1;
     const lockedUntil = nextCount >= ADMIN_LOGIN_MAX_ATTEMPTS ? Date.now() + ADMIN_LOGIN_LOCK_MS : 0;
-    state.adminLoginAttempts.set(clientKey, { count: nextCount, lockedUntil });
+    state.adminLoginAttempts.set(attemptKey, { count: nextCount, lockedUntil });
     addAuditEvent(lockedUntil ? 'admin_login_locked' : 'admin_login_failed', 'Tentativa de login administrativo sem sucesso', {
       ip: clientKey,
+      email,
       attemptsRemaining: Math.max(ADMIN_LOGIN_MAX_ATTEMPTS - nextCount, 0),
     });
     saveState();
@@ -494,6 +592,18 @@ app.post('/api/admin/login', (req, res) => {
       attemptsRemaining: ADMIN_LOGIN_MAX_ATTEMPTS - nextCount,
     });
   }
+});
+
+app.get('/api/admin/me', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Não autorizado' });
+  res.json({ user: publicUser(req.adminUser) });
+});
+
+app.get('/api/admin/users', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Não autorizado' });
+  res.json({
+    users: (state.users || []).map(publicUser),
+  });
 });
 
 // ─── SaaS: condomínio atual ───────────────────────────────────────────────────
@@ -1089,11 +1199,13 @@ io.on('connection', (socket) => {
   socket.emit('results_update', resultPayload(false));
 
   socket.on('admin_connect', ({ token }) => {
-    if (!isAdminToken(token)) return;
+    const session = getAdminSession(token);
+    if (!session) return;
     state.adminSockets.add(socket.id);
     socket.emit('state_sync', statePayload(true));
     socket.emit('results_update', resultPayload(true));
     socket.emit('admin_state', {
+      currentUser: publicUser(session.user),
       voters : Object.values(state.voters),
       auditLog: state.auditLog || [],
       proxies: Object.keys(state.proxies).map(uid => ({
@@ -1266,6 +1378,10 @@ app.post('/api/admin/seed', (req, res) => {
       location: 'Rua das Palmeiras, 120', quorumInstall: 25,
       accessCode: 'DEMO01', status: 'open', createdAt: new Date().toISOString() },
     units, pautas, voters, votes, proxies: {}, auditLog: demoAuditLog,
+    users: (state.users || []).map(user => ({
+      ...user,
+      condominiumIds: Array.from(new Set([...(user.condominiumIds || []), demoCondoId])),
+    })),
     adminSockets: state.adminSockets,
     pautaTimers : {},
     adminSessions: state.adminSessions,
@@ -1282,7 +1398,7 @@ async function startServer() {
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n✅  Servidor rodando em http://localhost:${PORT}`);
     console.log(`💾  Persistência: ${useDatabase ? 'PostgreSQL' : 'data.json local'}`);
-    console.log(`🔑  Senha do administrador configurada por ADMIN_PASSWORD${ADMIN_PASSWORD === 'admin123' ? ' (usando padrão local)' : ''}`);
+    console.log(`🔑  Admin local: ${ADMIN_EMAIL} / senha via ADMIN_PASSWORD${ADMIN_PASSWORD === 'admin123' ? ' (usando padrão local)' : ''}`);
     console.log(`\n   Para acessar de outros dispositivos na mesma rede:`);
     console.log(`   Descubra o IP desta máquina e acesse http://SEU_IP:${PORT}\n`);
   });

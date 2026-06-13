@@ -327,6 +327,7 @@ Adicionar recursos premium:
 ### Fase 1 - Fundacao SaaS
 
 - Iniciado em 10/06/2026: o app agora possui metadados de condominio ativo, tela administrativa de condominio e vinculo inicial de assembleia, unidades e pautas ao condominio atual.
+- Em 13/06/2026: primeira versao de autenticacao real criada, com usuario administrativo por e-mail, senha hasheada, sessao vinculada ao usuario e base inicial de papeis.
 - Criar modelo multi-condominio.
 - Criar login real por usuario.
 - Criar papeis: dono da conta, sindico, operador/condutor, participante.

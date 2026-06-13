@@ -1003,6 +1003,10 @@
         {
           "date": "2026-06-13",
           "text": "Seguranca e privacidade by design incorporadas como principio do projeto, com documento SECURITY.md e baseline antes de piloto real."
+        },
+        {
+          "date": "2026-06-13",
+          "text": "Primeira versao de autenticacao real implementada: login por e-mail/senha, senha com hash PBKDF2 + salt, sessao vinculada ao usuario e base inicial de papeis."
         }
       ],
       "deliverables": [
@@ -1019,10 +1023,10 @@
           "id": "f1-d2",
           "title": "Autenticacao real",
           "description": "Login por usuario, senha segura, sessao, recuperacao futura e papeis.",
-          "status": "nao-iniciado",
+          "status": "em-andamento",
           "owner": "Backend/Frontend",
           "dependsOn": "Tabela de usuarios",
-          "notes": "Substituir senha admin global."
+          "notes": "Primeira versao entregue: usuario admin local padrao, login por e-mail/senha, hash PBKDF2 + salt, sessao com usuario e papel. Ainda falta gestao de usuarios, troca/recuperacao de senha e permissoes granulares."
         },
         {
           "id": "f1-d3",
@@ -1037,10 +1041,10 @@
           "id": "f1-d4",
           "title": "Papeis e permissoes",
           "description": "Definir dono da conta, sindico, operador/condutor e participante.",
-          "status": "nao-iniciado",
+          "status": "em-andamento",
           "owner": "Produto/Backend",
           "dependsOn": "Autenticacao",
-          "notes": "Daily/OpenAI exigira papel de condutor."
+          "notes": "Base inicial de papeis criada: owner, admin, operator e participant. Ainda falta tela de gestao, regras granulares por acao e papel de condutor integrado ao fluxo Daily/OpenAI."
         },
         {
           "id": "f1-d5",
@@ -1049,7 +1053,7 @@
           "status": "em-andamento",
           "owner": "Produto/Backend",
           "dependsOn": "Modelo SaaS e autenticacao real",
-          "notes": "SECURITY.md criado. Ainda falta implementar login individual, papeis/permissoes, isolamento real por condominio, politica de retencao e revisao LGPD antes de piloto com dados reais."
+          "notes": "SECURITY.md criado. Login administrativo por usuario e senha hasheada implementado. Ainda falta isolamento real por condominio, politica de retencao, permissoes granulares e revisao LGPD antes de piloto com dados reais."
         }
       ]
     },

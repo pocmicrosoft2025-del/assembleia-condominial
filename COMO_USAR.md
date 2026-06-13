@@ -39,7 +39,10 @@ O terminal mostrará algo como:
 ### No computador do administrador:
 - Abra o navegador e acesse: **http://localhost:3000**
 - Clique em **"Acesso do Administrador"**
-- Senha padrão: `admin123`
+- E-mail local padrão: `admin@quorumhub.local`
+- Senha local padrão: `admin123`
+
+> Para uso real, troque a senha via variável de ambiente `ADMIN_PASSWORD` e evite dados reais enquanto a autenticação multiusuário completa ainda estiver evoluindo.
 
 ### Participantes (na mesma rede Wi-Fi):
 1. Descubra o IP da máquina onde o servidor está rodando:
